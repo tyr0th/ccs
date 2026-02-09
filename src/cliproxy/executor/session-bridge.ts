@@ -21,6 +21,8 @@ import {
 import { detectRunningProxy, waitForProxyHealthy, reclaimOrphanedProxy } from '../proxy-detector';
 import { withStartupLock } from '../startup-lock';
 import { killProcessOnPort } from '../../utils/platform-commands';
+import { cleanupTransformerShadowAuthDir } from '../shadow-auth-builder';
+import { regenerateConfig } from '../config-generator';
 
 export interface ProxySessionResult {
   sessionId?: string;
@@ -175,6 +177,7 @@ export function setupCleanupHandlers(
   codexReasoningProxy: unknown,
   toolSanitizationProxy: unknown,
   httpsTunnel: unknown,
+  modelTierTransformer: unknown,
   verbose: boolean
 ): void {
   const log = (msg: string) => {
@@ -183,9 +186,7 @@ export function setupCleanupHandlers(
     }
   };
 
-  const cleanup = () => {
-    log('Parent signal received, cleaning up');
-
+  const stopProxies = () => {
     if (
       codexReasoningProxy &&
       typeof codexReasoningProxy === 'object' &&
@@ -205,6 +206,26 @@ export function setupCleanupHandlers(
     if (httpsTunnel && typeof httpsTunnel === 'object' && 'stop' in httpsTunnel) {
       (httpsTunnel as { stop: () => void }).stop();
     }
+
+    if (
+      modelTierTransformer &&
+      typeof modelTierTransformer === 'object' &&
+      'stop' in modelTierTransformer
+    ) {
+      (modelTierTransformer as { stop: () => void }).stop();
+      cleanupTransformerShadowAuthDir();
+      // Restore config with original auth dir for next session
+      try {
+        regenerateConfig(sessionPort);
+      } catch {
+        // Best-effort restore
+      }
+    }
+  };
+
+  const cleanup = () => {
+    log('Parent signal received, cleaning up');
+    stopProxies();
 
     // Unregister session, proxy keeps running (local mode only)
     if (sessionId) {
@@ -215,26 +236,7 @@ export function setupCleanupHandlers(
 
   claude.on('exit', (code, signal) => {
     log(`Claude exited: code=${code}, signal=${signal}`);
-
-    if (
-      codexReasoningProxy &&
-      typeof codexReasoningProxy === 'object' &&
-      'stop' in codexReasoningProxy
-    ) {
-      (codexReasoningProxy as { stop: () => void }).stop();
-    }
-
-    if (
-      toolSanitizationProxy &&
-      typeof toolSanitizationProxy === 'object' &&
-      'stop' in toolSanitizationProxy
-    ) {
-      (toolSanitizationProxy as { stop: () => void }).stop();
-    }
-
-    if (httpsTunnel && typeof httpsTunnel === 'object' && 'stop' in httpsTunnel) {
-      (httpsTunnel as { stop: () => void }).stop();
-    }
+    stopProxies();
 
     // Unregister this session (proxy keeps running for persistence) - only for local mode
     if (sessionId) {
@@ -251,26 +253,7 @@ export function setupCleanupHandlers(
 
   claude.on('error', (error) => {
     console.error(require('../../utils/ui').fail(`Claude CLI error: ${error}`));
-
-    if (
-      codexReasoningProxy &&
-      typeof codexReasoningProxy === 'object' &&
-      'stop' in codexReasoningProxy
-    ) {
-      (codexReasoningProxy as { stop: () => void }).stop();
-    }
-
-    if (
-      toolSanitizationProxy &&
-      typeof toolSanitizationProxy === 'object' &&
-      'stop' in toolSanitizationProxy
-    ) {
-      (toolSanitizationProxy as { stop: () => void }).stop();
-    }
-
-    if (httpsTunnel && typeof httpsTunnel === 'object' && 'stop' in httpsTunnel) {
-      (httpsTunnel as { stop: () => void }).stop();
-    }
+    stopProxies();
 
     // Unregister session, proxy keeps running (local mode only)
     if (sessionId) {

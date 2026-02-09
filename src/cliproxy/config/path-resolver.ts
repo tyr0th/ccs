@@ -33,6 +33,14 @@ export function getAuthDir(): string {
 }
 
 /**
+ * Get transformer shadow auth directory.
+ * Used when model tier transformer is active to inject base_url for Pro accounts.
+ */
+export function getTransformerAuthDir(): string {
+  return path.join(getCliproxyDir(), 'auth-transformer');
+}
+
+/**
  * Get auth directory for provider
  * All providers use a FLAT auth directory structure for unified config.
  * CLIProxyAPI stores OAuth tokens directly in auth/ (not subdirectories).

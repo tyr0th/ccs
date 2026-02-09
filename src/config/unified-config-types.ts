@@ -367,6 +367,8 @@ export interface AutoQuotaConfig {
   tier_priority: string[];
   /** Minutes to skip exhausted account before retry (default: 5) */
   cooldown_minutes: number;
+  /** Model fallback mapping for tier-gated models. Key = ultra-only model, Value = fallback for lower tiers */
+  model_tier_fallback?: Record<string, string>;
 }
 
 /**
@@ -411,6 +413,9 @@ export const DEFAULT_AUTO_QUOTA_CONFIG: AutoQuotaConfig = {
   exhaustion_threshold: 5,
   tier_priority: ['ultra', 'pro', 'free'],
   cooldown_minutes: 5,
+  model_tier_fallback: {
+    'claude-opus-4-6-thinking': 'claude-opus-4-5-thinking',
+  },
 };
 
 /**

@@ -49,6 +49,10 @@ import {
 } from '../../utils/websearch-manager';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
+import { ModelTierTransformerProxy } from '../model-tier-transformer-proxy';
+import { hasTierGatedModels } from '../model-catalog';
+import { createTransformerShadowAuthDir } from '../shadow-auth-builder';
+import { regenerateConfig } from '../config-generator';
 
 // Import modular components
 import { waitForProxyReadyWithSpinner, spawnProxy } from './lifecycle-manager';
@@ -532,19 +536,74 @@ export async function execClaudeWithCLIProxy(
   let proxy: ChildProcess | null = null;
   let configPath: string | undefined;
 
+  // 6a. Model tier transformer (Antigravity mixed-tier accounts)
+  let modelTierTransformer: ModelTierTransformerProxy | null = null;
+  let transformerAuthDir: string | null = null;
+
+  if (!useRemoteProxy && provider === 'agy' && hasTierGatedModels('agy')) {
+    const fallbackMap = unifiedConfig.quota_management?.auto?.model_tier_fallback ?? {
+      'claude-opus-4-6-thinking': 'claude-opus-4-5-thinking',
+    };
+
+    if (Object.keys(fallbackMap).length > 0) {
+      try {
+        modelTierTransformer = new ModelTierTransformerProxy({
+          fallbackMap,
+          upstreamBaseUrl: 'https://cloudcode-pa.googleapis.com',
+          verbose,
+        });
+        const transformerPort = await modelTierTransformer.start();
+        log(`Model tier transformer started on port ${transformerPort}`);
+
+        transformerAuthDir = createTransformerShadowAuthDir(transformerPort, fallbackMap);
+
+        if (transformerAuthDir) {
+          log(`Shadow auth dir created: ${transformerAuthDir}`);
+        } else {
+          // No mixed tiers detected, stop transformer
+          modelTierTransformer.stop();
+          modelTierTransformer = null;
+          log('No mixed tiers detected, transformer not needed');
+        }
+      } catch (error) {
+        const err = error as Error;
+        if (verbose) {
+          console.error(warn(`Model tier transformer disabled: ${err.message}`));
+        }
+        modelTierTransformer = null;
+        transformerAuthDir = null;
+      }
+    }
+  }
+
   if (!useRemoteProxy) {
     log(`Generating config for ${provider}`);
-    configPath = generateConfig(provider, cfg.port);
+
+    // When transformer is active, force regenerate config with shadow auth dir
+    if (transformerAuthDir) {
+      configPath = regenerateConfig(cfg.port, transformerAuthDir);
+      log(`Config regenerated with shadow auth dir`);
+    } else {
+      configPath = generateConfig(provider, cfg.port);
+    }
     log(`Config written: ${configPath}`);
 
     // 6a. Check or join existing proxy
-    const { sessionId: existingSessionId, shouldSpawn } = await checkOrJoinProxy(
-      cfg.port,
-      cfg.timeout,
-      verbose
-    );
+    const proxyCheck = await checkOrJoinProxy(cfg.port, cfg.timeout, verbose);
+    let shouldSpawn = proxyCheck.shouldSpawn;
 
-    sessionId = existingSessionId;
+    sessionId = proxyCheck.sessionId;
+
+    // If transformer is active and proxy was already running, force restart
+    // to pick up the new auth-dir with shadow injection
+    if (transformerAuthDir && !shouldSpawn && sessionId) {
+      log('Restarting proxy to apply transformer auth dir');
+      const { stopProxy } = await import('../session-tracker');
+      await stopProxy(cfg.port);
+      await new Promise((r) => setTimeout(r, 500));
+      shouldSpawn = true;
+      sessionId = undefined;
+    }
 
     // 6b. Spawn new proxy if needed
     if (shouldSpawn && binaryPath) {
@@ -775,6 +834,7 @@ export async function execClaudeWithCLIProxy(
     codexReasoningProxy,
     toolSanitizationProxy,
     httpsTunnel,
+    modelTierTransformer,
     verbose
   );
 }

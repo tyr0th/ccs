@@ -78,6 +78,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'gemini-claude-opus-4-6-thinking',
         name: 'Claude Opus 4.6 Thinking',
+        tier: 'ultra',
         description: 'Latest flagship, extended thinking',
         thinking: {
           type: 'budget',
@@ -360,4 +361,22 @@ export function supportsExtendedContext(provider: CLIProxyProvider, modelId: str
 export function isNativeGeminiModel(modelId: string): boolean {
   const lower = modelId.toLowerCase();
   return lower.startsWith('gemini-') && !lower.startsWith('gemini-claude-');
+}
+
+/**
+ * Get models that are gated to a specific tier (e.g., ultra-only).
+ * Used to detect when a transformer proxy is needed for mixed-tier accounts.
+ */
+export function getTierGatedModels(provider: CLIProxyProvider): ModelEntry[] {
+  const catalog = MODEL_CATALOG[provider];
+  if (!catalog) return [];
+  return catalog.models.filter((m) => m.tier === 'ultra');
+}
+
+/**
+ * Check if provider has any tier-gated models.
+ * Returns true if transformer proxy may be needed for mixed-tier setups.
+ */
+export function hasTierGatedModels(provider: CLIProxyProvider): boolean {
+  return getTierGatedModels(provider).length > 0;
 }

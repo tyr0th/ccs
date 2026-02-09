@@ -135,9 +135,10 @@ function generateOAuthModelAliasSection(existingAliases?: string): string {
 function generateUnifiedConfigContent(
   port: number = CLIPROXY_DEFAULT_PORT,
   userApiKeys: string[] = [],
-  existingAliases?: string
+  existingAliases?: string,
+  authDirOverride?: string
 ): string {
-  const authDir = getAuthDir(); // Base auth dir - CLIProxyAPI scans subdirectories
+  const authDir = authDirOverride || getAuthDir();
   // Convert Windows backslashes to forward slashes for YAML compatibility
   const authDirNormalized = authDir.split(path.sep).join('/');
 
@@ -239,7 +240,8 @@ ${generateOAuthModelAliasSection(existingAliases)}
  */
 export function generateConfig(
   provider: CLIProxyProvider,
-  port: number = CLIPROXY_DEFAULT_PORT
+  port: number = CLIPROXY_DEFAULT_PORT,
+  authDirOverride?: string
 ): string {
   const configPath = getConfigPathForPort(port);
 
@@ -250,7 +252,7 @@ export function generateConfig(
 
   // Only generate config if it doesn't exist (unified config serves all providers)
   if (!fs.existsSync(configPath)) {
-    const configContent = generateUnifiedConfigContent(port);
+    const configContent = generateUnifiedConfigContent(port, [], undefined, authDirOverride);
     fs.writeFileSync(configPath, configContent, { mode: 0o600 });
   }
 
@@ -337,7 +339,10 @@ function extractYamlSection(content: string, sectionKey: string): string {
  * @param port - Default port to use if not found in existing config
  * @returns Path to new config file
  */
-export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
+export function regenerateConfig(
+  port: number = CLIPROXY_DEFAULT_PORT,
+  authDirOverride?: string
+): string {
   const configPath = getConfigPathForPort(port);
 
   // Preserve user settings from existing config
@@ -376,7 +381,12 @@ export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
   fs.mkdirSync(getAuthDir(), { recursive: true, mode: 0o700 });
 
   // Generate fresh config with preserved user API keys and aliases
-  let configContent = generateUnifiedConfigContent(effectivePort, userApiKeys, existingAliases);
+  let configContent = generateUnifiedConfigContent(
+    effectivePort,
+    userApiKeys,
+    existingAliases,
+    authDirOverride
+  );
 
   // Re-append claude-api-key section if it existed
   if (claudeApiKeySection) {
