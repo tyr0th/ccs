@@ -588,16 +588,19 @@ describe('ModelTierTransformerProxy', () => {
       );
     });
 
-    it('should rewrite modelVersion in Antigravity SSE format', async () => {
+    it('should rewrite response.modelVersion in Antigravity SSE format', async () => {
       upstream = await createUpstreamMock((_req, res) => {
         res.writeHead(200, { 'content-type': 'text/event-stream' });
-        // Antigravity native format uses modelVersion, not message.model
+        // Antigravity native format nests under "response": { "modelVersion": "..." }
+        // CLIProxy translator reads gjson path "response.modelVersion"
         res.write(
           'data: ' +
             JSON.stringify({
-              candidates: [{ content: { parts: [{ text: 'Hello' }] } }],
-              modelVersion: 'claude-opus-4-5-thinking',
-              usageMetadata: { promptTokenCount: 10 },
+              response: {
+                candidates: [{ content: { parts: [{ text: 'Hello' }] } }],
+                modelVersion: 'claude-opus-4-5-thinking',
+                usageMetadata: { promptTokenCount: 10 },
+              },
             }) +
             '\n\n'
         );
@@ -634,25 +637,29 @@ describe('ModelTierTransformerProxy', () => {
         })
         .filter(Boolean);
 
-      // modelVersion should be rewritten to opus-4-6
+      // response.modelVersion should be rewritten to opus-4-6
       const antigravityEvent = events.find(
-        (e: Record<string, unknown>) => typeof e.modelVersion === 'string'
+        (e: Record<string, unknown>) =>
+          e.response && typeof (e.response as Record<string, unknown>).modelVersion === 'string'
       );
       expect(antigravityEvent).toBeDefined();
-      expect((antigravityEvent as Record<string, string>).modelVersion).toBe(
-        'claude-opus-4-6-thinking'
-      );
+      expect(
+        ((antigravityEvent as Record<string, unknown>).response as Record<string, string>)
+          .modelVersion
+      ).toBe('claude-opus-4-6-thinking');
     });
 
-    it('should rewrite modelVersion in Antigravity non-streaming JSON', async () => {
+    it('should rewrite response.modelVersion in Antigravity non-streaming JSON', async () => {
       upstream = await createUpstreamMock((_req, res) => {
         res.writeHead(200, { 'content-type': 'application/json' });
-        // Antigravity non-streaming response format
+        // Antigravity non-streaming: nests under "response"
         res.end(
           JSON.stringify({
-            candidates: [{ content: { parts: [{ text: 'Hi' }] }, finishReason: 'STOP' }],
-            modelVersion: 'claude-opus-4-5-20251101-thinking',
-            usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10 },
+            response: {
+              candidates: [{ content: { parts: [{ text: 'Hi' }] }, finishReason: 'STOP' }],
+              modelVersion: 'claude-opus-4-5-20251101-thinking',
+              usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 10 },
+            },
           })
         );
       });
@@ -669,10 +676,10 @@ describe('ModelTierTransformerProxy', () => {
         JSON.stringify({ model: 'claude-opus-4-6-thinking' })
       );
       const body = JSON.parse(response.body);
-      // modelVersion should be rewritten (fuzzy match catches date suffix)
-      expect(body.modelVersion).toBe('claude-opus-4-6-thinking');
+      // response.modelVersion should be rewritten (fuzzy match catches date suffix)
+      expect(body.response.modelVersion).toBe('claude-opus-4-6-thinking');
       // candidates should be preserved
-      expect(body.candidates[0].content.parts[0].text).toBe('Hi');
+      expect(body.response.candidates[0].content.parts[0].text).toBe('Hi');
     });
 
     it('should track responseRewrites in stats', async () => {

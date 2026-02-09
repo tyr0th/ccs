@@ -237,7 +237,8 @@ function modelMatchesFrom(responseModel: string, from: string): boolean {
 /**
  * Rewrite a single SSE event's data line, replacing the model name.
  * Handles BOTH formats since the transformer sits between CLIProxy and Antigravity:
- * - Antigravity native format: `{ modelVersion: "claude-opus-4-5-thinking-..." }`
+ * - Antigravity native format: `{ response: { modelVersion: "claude-opus-4-5-..." } }`
+ * - Antigravity flat format (fallback): `{ modelVersion: "claude-opus-4-5-..." }`
  * - Anthropic format (fallback): `{ type: "message_start", message: { model: "..." } }`
  * Non-data lines and other events pass through unchanged.
  */
@@ -265,10 +266,23 @@ function rewriteSSEEvent(event: string, rewrite: ModelRewrite): string {
       }
 
       let rewritten = false;
+      const resp = data.response;
 
-      // Antigravity format: top-level modelVersion field
-      // (CLIProxy reads this to set message.model in Anthropic translation)
+      // Antigravity nested format: { response: { modelVersion: "..." } }
+      // CLIProxy translator reads gjson path "response.modelVersion" to set message.model
       if (
+        resp &&
+        typeof resp === 'object' &&
+        typeof resp.modelVersion === 'string' &&
+        modelMatchesFrom(resp.modelVersion, rewrite.from)
+      ) {
+        resp.modelVersion = rewrite.to;
+        rewritten = true;
+      }
+
+      // Antigravity flat format (fallback): top-level modelVersion
+      if (
+        !rewritten &&
         typeof data.modelVersion === 'string' &&
         modelMatchesFrom(data.modelVersion, rewrite.from)
       ) {
@@ -349,7 +363,20 @@ export function forwardAndRewriteModel(
               const raw = Buffer.concat(chunks).toString('utf-8');
               const data = JSON.parse(raw);
               if (data && typeof data === 'object') {
-                // Antigravity format: modelVersion field
+                const resp = data.response;
+                // Antigravity nested format: { response: { modelVersion: "..." } }
+                if (
+                  resp &&
+                  typeof resp === 'object' &&
+                  typeof resp.modelVersion === 'string' &&
+                  modelMatchesFrom(resp.modelVersion, rewrite.from)
+                ) {
+                  resp.modelVersion = rewrite.to;
+                  log?.(
+                    `Response model rewritten (JSON response.modelVersion): ${rewrite.from} -> ${rewrite.to}`
+                  );
+                }
+                // Antigravity flat format (fallback): top-level modelVersion
                 if (
                   typeof data.modelVersion === 'string' &&
                   modelMatchesFrom(data.modelVersion, rewrite.from)
