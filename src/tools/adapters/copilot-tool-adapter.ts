@@ -1,6 +1,6 @@
-import { COPILOT_SUBCOMMANDS, handleCopilotCommandLegacy } from '../../commands/copilot-command';
 import copilotRoutes from '../../web-server/routes/copilot-routes';
 import type { ToolAdapter } from '../types';
+import { COPILOT_SUBCOMMANDS, runCopilotToolSubcommand } from './copilot-tool-runtime';
 
 export const copilotToolAdapter: ToolAdapter = {
   id: 'copilot',
@@ -13,5 +13,5 @@ export const copilotToolAdapter: ToolAdapter = {
       router: copilotRoutes,
     },
   ],
-  run: handleCopilotCommandLegacy,
+  run: runCopilotToolSubcommand,
 };

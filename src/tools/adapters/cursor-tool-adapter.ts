@@ -1,6 +1,6 @@
-import { CURSOR_SUBCOMMANDS, handleCursorCommandLegacy } from '../../commands/cursor-command';
 import cursorRoutes from '../../web-server/routes/cursor-routes';
 import type { ToolAdapter } from '../types';
+import { CURSOR_SUBCOMMANDS, runCursorToolSubcommand } from './cursor-tool-runtime';
 
 export const cursorToolAdapter: ToolAdapter = {
   id: 'cursor',
@@ -13,5 +13,5 @@ export const cursorToolAdapter: ToolAdapter = {
       router: cursorRoutes,
     },
   ],
-  run: handleCursorCommandLegacy,
+  run: runCursorToolSubcommand,
 };
