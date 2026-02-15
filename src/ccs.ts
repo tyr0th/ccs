@@ -525,6 +525,13 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Special case: tool command (adapter-based integrations)
+  if (firstArg === 'tool') {
+    const { handleToolCommand } = await import('./commands/tool-command');
+    const exitCode = await handleToolCommand(args.slice(1));
+    process.exit(exitCode);
+  }
+
   // Special case: setup command (first-time wizard)
   if (firstArg === 'setup' || firstArg === '--setup') {
     const { handleSetupCommand } = await import('./commands/setup-command');

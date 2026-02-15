@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
@@ -11,6 +12,7 @@ import {
   BarChart3,
   Gauge,
   Github,
+  Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -32,6 +34,7 @@ import {
 import { CcsLogo } from '@/components/shared/ccs-logo';
 import { useSidebar } from '@/hooks/use-sidebar';
 import { useCliproxyUpdateCheck } from '@/hooks/use-cliproxy';
+import { useDashboardTools } from '@/hooks/use-tool';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -51,6 +54,7 @@ interface SidebarItem {
   label: string;
   icon?: LucideIcon;
   iconSrc?: string;
+  legacyPaths?: string[];
   badge?: SidebarBadge;
   isCollapsible?: boolean;
   children?: SidebarChildItem[];
@@ -62,7 +66,7 @@ interface SidebarGroupDef {
 }
 
 // Define navigation groups
-const navGroups: SidebarGroupDef[] = [
+const BASE_NAV_GROUPS: SidebarGroupDef[] = [
   {
     title: 'General',
     items: [
@@ -89,8 +93,6 @@ const navGroups: SidebarGroupDef[] = [
           { path: '/cliproxy/control-panel', icon: Gauge, label: 'Control Panel' },
         ],
       },
-      { path: '/copilot', icon: Github, label: 'GitHub Copilot' },
-      { path: '/cursor', iconSrc: '/assets/sidebar/cursor.svg', label: 'Cursor IDE' },
       {
         path: '/accounts',
         icon: Users,
@@ -117,6 +119,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { state } = useSidebar();
   const { data: updateCheck } = useCliproxyUpdateCheck();
+  const { navItems: dashboardToolNavItems } = useDashboardTools();
 
   // Dynamic label for CLIProxy based on backend
   const cliproxyLabel = updateCheck?.backendLabel ?? 'CLIProxy';
@@ -129,14 +132,50 @@ export function AppSidebar() {
     return item.label;
   };
 
-  // Helper to check if a route is active (exact match)
-  const isRouteActive = (path: string) => location.pathname === path;
+  const navGroups = useMemo<SidebarGroupDef[]>(() => {
+    const toolItems: SidebarItem[] = dashboardToolNavItems.map((item) => ({
+      path: item.path,
+      label: item.label,
+      icon: item.iconKey === 'github' ? Github : item.iconKey === 'wrench' ? Wrench : undefined,
+      iconSrc: item.iconSrc,
+      legacyPaths: item.legacyPaths,
+    }));
+
+    return BASE_NAV_GROUPS.map((group) => {
+      if (group.title !== 'Identity & Access') {
+        return group;
+      }
+
+      const accountsIndex = group.items.findIndex((item) => item.path === '/accounts');
+      if (accountsIndex < 0 || toolItems.length === 0) {
+        return group;
+      }
+
+      return {
+        ...group,
+        items: [
+          ...group.items.slice(0, accountsIndex),
+          ...toolItems,
+          ...group.items.slice(accountsIndex),
+        ],
+      };
+    });
+  }, [dashboardToolNavItems]);
+
+  // Helper to check if a route is active (exact match, alias, or sub-route)
+  const isRouteActive = (path: string, aliases?: string[]) => {
+    const candidates = aliases ? [path, ...aliases] : [path];
+    return candidates.some(
+      (candidate) =>
+        location.pathname === candidate || location.pathname.startsWith(`${candidate}/`)
+    );
+  };
 
   // Helper to check if a group/parent should be open based on active child
   // Also handles sub-routes (e.g., /cliproxy/control-panel matches /cliproxy)
   const isParentActive = (children: { path: string }[]) => {
     return children.some(
-      (child) => isRouteActive(child.path) || location.pathname.startsWith(child.path + '/')
+      (child) => isRouteActive(child.path) || location.pathname.startsWith(`${child.path}/`)
     );
   };
 
@@ -206,7 +245,7 @@ export function AppSidebar() {
                     ) : (
                       <SidebarMenuButton
                         asChild
-                        isActive={isRouteActive(item.path)}
+                        isActive={isRouteActive(item.path, item.legacyPaths)}
                         tooltip={getItemLabel(item)}
                       >
                         <Link to={item.path}>
@@ -219,7 +258,7 @@ export function AppSidebar() {
                               <TooltipTrigger asChild>
                                 <span
                                   className={`group-data-[collapsible=icon]:hidden ml-auto flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-                                    isRouteActive(item.path)
+                                    isRouteActive(item.path, item.legacyPaths)
                                       ? 'bg-sidebar-accent-foreground/20 text-sidebar-accent-foreground border border-sidebar-accent-foreground/30'
                                       : 'bg-accent/15 text-accent border border-accent/30 group-hover/menu-item:bg-sidebar-accent-foreground/20 group-hover/menu-item:text-sidebar-accent-foreground group-hover/menu-item:border-sidebar-accent-foreground/30'
                                   }`}

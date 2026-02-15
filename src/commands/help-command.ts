@@ -248,6 +248,20 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // MAJOR SECTION 6: Tool Adapters
+  // ═══════════════════════════════════════════════════════════════════════════
+  printMajorSection(
+    'Tool Adapters',
+    ['Unified adapter command surface for integrations'],
+    [
+      ['ccs tool <id> <subcommand>', 'Run a registered tool adapter'],
+      ['ccs tool --help', 'List available adapters'],
+      ['ccs tool cursor auth', 'Run Cursor adapter via tool surface'],
+      ['ccs tool copilot status', 'Run Copilot adapter via tool surface'],
+    ]
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // SUB-SECTIONS (simpler styling)
   // ═══════════════════════════════════════════════════════════════════════════
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { queryClient } from '@/lib/query-client';
@@ -25,8 +25,7 @@ const CliproxyPage = lazy(() =>
 const CliproxyControlPanelPage = lazy(() =>
   import('@/pages/cliproxy-control-panel').then((m) => ({ default: m.CliproxyControlPanelPage }))
 );
-const CopilotPage = lazy(() => import('@/pages/copilot').then((m) => ({ default: m.CopilotPage })));
-const CursorPage = lazy(() => import('@/pages/cursor').then((m) => ({ default: m.CursorPage })));
+const ToolPage = lazy(() => import('@/pages/tool').then((m) => ({ default: m.ToolPage })));
 const AccountsPage = lazy(() =>
   import('@/pages/accounts').then((m) => ({ default: m.AccountsPage }))
 );
@@ -93,21 +92,16 @@ export default function App() {
                       }
                     />
                     <Route
-                      path="/copilot"
+                      path="/tools/:toolId"
                       element={
                         <Suspense fallback={<PageLoader />}>
-                          <CopilotPage />
+                          <ToolPage />
                         </Suspense>
                       }
                     />
-                    <Route
-                      path="/cursor"
-                      element={
-                        <Suspense fallback={<PageLoader />}>
-                          <CursorPage />
-                        </Suspense>
-                      }
-                    />
+                    {/* Legacy redirects */}
+                    <Route path="/copilot" element={<Navigate to="/tools/copilot" replace />} />
+                    <Route path="/cursor" element={<Navigate to="/tools/cursor" replace />} />
                     <Route
                       path="/accounts"
                       element={
