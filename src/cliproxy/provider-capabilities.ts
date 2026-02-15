@@ -1,6 +1,11 @@
+import {
+  PROVIDER_CATALOG,
+  type ProviderCatalogEntry,
+  type ProviderOAuthFlowType,
+} from './provider-catalog';
 import type { CLIProxyProvider } from './types';
 
-export type OAuthFlowType = 'authorization_code' | 'device_code';
+export type OAuthFlowType = ProviderOAuthFlowType;
 
 export interface ProviderFeatureFlags {
   supportsQuota: boolean;
@@ -16,146 +21,75 @@ export interface ProviderCapabilities {
   displayName: string;
   oauthFlow: OAuthFlowType;
   callbackPort: number | null;
-  /**
-   * Alternative provider names used by CLIProxyAPI or stats endpoints.
-   * These aliases normalize external names to canonical CCS provider IDs.
-   */
   aliases: readonly string[];
-  /**
-   * UI-safe logo asset path for provider branding.
-   */
   logoAssetPath: string | null;
-  /**
-   * Provider feature flags consumed by CLI/UI adapters.
-   */
   features: ProviderFeatureFlags;
-  /**
-   * Provider defaults used by config commands and migration-safe accessors.
-   */
   defaults: ProviderDefaults;
 }
 
-interface ProviderCapabilitiesInput {
-  displayName: string;
-  oauthFlow: OAuthFlowType;
-  callbackPort: number | null;
-  aliases?: readonly string[];
-  logoAssetPath?: string | null;
-  features?: Partial<ProviderFeatureFlags>;
-  defaults?: Partial<ProviderDefaults>;
+function buildCapabilitiesMap(
+  catalogEntries: readonly ProviderCatalogEntry[]
+): Record<CLIProxyProvider, ProviderCapabilities> {
+  const capabilities = {} as Record<CLIProxyProvider, ProviderCapabilities>;
+  for (const entry of catalogEntries) {
+    capabilities[entry.id] = {
+      displayName: entry.displayName,
+      oauthFlow: entry.oauthFlow,
+      callbackPort: entry.callbackPort,
+      aliases: entry.aliases,
+      logoAssetPath: entry.logoAssetPath,
+      features: {
+        supportsQuota: entry.features.supportsQuota,
+        requiresNickname: entry.features.requiresNickname,
+        supportsImageAnalysis: entry.features.supportsImageAnalysis,
+      },
+      defaults: {
+        imageAnalysisModel: entry.defaults.imageAnalysisModel,
+      },
+    };
+  }
+  return capabilities;
 }
 
-const DEFAULT_PROVIDER_FEATURES: ProviderFeatureFlags = {
-  supportsQuota: false,
-  requiresNickname: false,
-  supportsImageAnalysis: true,
-};
-
-const DEFAULT_PROVIDER_DEFAULTS: ProviderDefaults = {
-  imageAnalysisModel: null,
-};
-
-function defineProviderCapabilities(input: ProviderCapabilitiesInput): ProviderCapabilities {
-  return {
-    displayName: input.displayName,
-    oauthFlow: input.oauthFlow,
-    callbackPort: input.callbackPort,
-    aliases: input.aliases ?? [],
-    logoAssetPath: input.logoAssetPath ?? null,
-    features: {
-      ...DEFAULT_PROVIDER_FEATURES,
-      ...input.features,
-    },
-    defaults: {
-      ...DEFAULT_PROVIDER_DEFAULTS,
-      ...input.defaults,
-    },
-  };
+function normalizeProviderKey(providerName: string): string {
+  return providerName.trim().toLowerCase();
 }
 
-export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilities> = {
-  gemini: defineProviderCapabilities({
-    displayName: 'Google Gemini',
-    oauthFlow: 'authorization_code',
-    callbackPort: 8085,
-    aliases: ['gemini-cli'],
-    logoAssetPath: '/assets/providers/gemini-color.svg',
-    defaults: { imageAnalysisModel: 'gemini-2.5-flash' },
-  }),
-  codex: defineProviderCapabilities({
-    displayName: 'Codex',
-    oauthFlow: 'authorization_code',
-    callbackPort: 1455,
-    logoAssetPath: '/assets/providers/openai.svg',
-    defaults: { imageAnalysisModel: 'gpt-5.1-codex-mini' },
-  }),
-  agy: defineProviderCapabilities({
-    displayName: 'AntiGravity',
-    oauthFlow: 'authorization_code',
-    callbackPort: 51121,
-    aliases: ['antigravity'],
-    logoAssetPath: '/assets/providers/agy.png',
-    features: { supportsQuota: true },
-    defaults: { imageAnalysisModel: 'gemini-2.5-flash' },
-  }),
-  qwen: defineProviderCapabilities({
-    displayName: 'Qwen',
-    oauthFlow: 'device_code',
-    callbackPort: null,
-    logoAssetPath: '/assets/providers/qwen-color.svg',
-    defaults: { imageAnalysisModel: 'vision-model' },
-  }),
-  iflow: defineProviderCapabilities({
-    displayName: 'iFlow',
-    oauthFlow: 'authorization_code',
-    callbackPort: 11451,
-    logoAssetPath: '/assets/providers/iflow.png',
-    defaults: { imageAnalysisModel: 'qwen3-vl-plus' },
-  }),
-  kiro: defineProviderCapabilities({
-    displayName: 'Kiro (AWS)',
-    oauthFlow: 'device_code',
-    callbackPort: null,
-    aliases: ['codewhisperer'],
-    logoAssetPath: '/assets/providers/kiro.png',
-    features: { requiresNickname: true },
-    defaults: { imageAnalysisModel: 'kiro-claude-haiku-4-5' },
-  }),
-  ghcp: defineProviderCapabilities({
-    displayName: 'GitHub Copilot (OAuth)',
-    oauthFlow: 'device_code',
-    callbackPort: null,
-    aliases: ['github-copilot', 'copilot'],
-    logoAssetPath: '/assets/providers/copilot.svg',
-    features: { requiresNickname: true },
-    defaults: { imageAnalysisModel: 'claude-haiku-4.5' },
-  }),
-  claude: defineProviderCapabilities({
-    displayName: 'Claude',
-    oauthFlow: 'authorization_code',
-    callbackPort: 54545,
-    aliases: ['anthropic'],
-    logoAssetPath: '/assets/providers/claude.svg',
-    defaults: { imageAnalysisModel: 'claude-haiku-4-5-20251001' },
-  }),
-};
+export function buildProviderAliasMap(
+  catalogEntries: readonly Pick<ProviderCatalogEntry, 'id' | 'aliases'>[]
+): ReadonlyMap<string, CLIProxyProvider> {
+  const aliasMap = new Map<string, CLIProxyProvider>();
+
+  for (const entry of catalogEntries) {
+    const names = [entry.id, ...entry.aliases];
+    for (const name of names) {
+      const normalized = normalizeProviderKey(name);
+      if (!normalized) {
+        continue;
+      }
+
+      const existing = aliasMap.get(normalized);
+      if (existing && existing !== entry.id) {
+        throw new Error(
+          `Provider alias collision for '${normalized}' between '${existing}' and '${entry.id}'`
+        );
+      }
+      aliasMap.set(normalized, entry.id);
+    }
+  }
+
+  return aliasMap;
+}
+
+export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilities> =
+  buildCapabilitiesMap(PROVIDER_CATALOG);
 
 export const CLIPROXY_PROVIDER_IDS = Object.freeze(
-  Object.keys(PROVIDER_CAPABILITIES) as CLIProxyProvider[]
+  PROVIDER_CATALOG.map((entry) => entry.id) as CLIProxyProvider[]
 );
 
 const PROVIDER_ID_SET = new Set(CLIPROXY_PROVIDER_IDS);
-
-const PROVIDER_ALIAS_MAP: ReadonlyMap<string, CLIProxyProvider> = (() => {
-  const entries: Array<[string, CLIProxyProvider]> = [];
-  for (const provider of CLIPROXY_PROVIDER_IDS) {
-    entries.push([provider.toLowerCase(), provider]);
-    for (const alias of PROVIDER_CAPABILITIES[provider].aliases) {
-      entries.push([alias.toLowerCase(), provider]);
-    }
-  }
-  return new Map(entries);
-})();
+const PROVIDER_ALIAS_MAP = buildProviderAliasMap(PROVIDER_CATALOG);
 
 export function isCLIProxyProvider(provider: string): provider is CLIProxyProvider {
   return PROVIDER_ID_SET.has(provider as CLIProxyProvider);
@@ -222,6 +156,9 @@ export function getOAuthCallbackPort(provider: CLIProxyProvider): number | null 
 }
 
 export function mapExternalProviderName(providerName: string): CLIProxyProvider | null {
-  const normalized = providerName.toLowerCase();
+  const normalized = normalizeProviderKey(providerName);
+  if (!normalized) {
+    return null;
+  }
   return PROVIDER_ALIAS_MAP.get(normalized) ?? null;
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   CLIPROXY_PROVIDER_IDS,
   DEVICE_CODE_PROVIDER_IDS,
+  buildProviderAliasMap,
   getOAuthCallbackPort,
   getOAuthFlowType,
   getProviderAliases,
@@ -18,6 +19,7 @@ import {
   supportsProviderImageAnalysis,
   supportsProviderQuota,
 } from '../../../src/cliproxy/provider-capabilities';
+import type { ProviderCatalogEntry } from '../../../src/cliproxy/provider-catalog';
 import {
   OAUTH_CALLBACK_PORTS as DIAGNOSTIC_CALLBACK_PORTS,
   OAUTH_FLOW_TYPES,
@@ -72,6 +74,15 @@ describe('provider-capabilities', () => {
     expect(mapExternalProviderName('copilot')).toBe('ghcp');
     expect(mapExternalProviderName('anthropic')).toBe('claude');
     expect(mapExternalProviderName('unknown-provider')).toBeNull();
+  });
+
+  it('rejects alias collisions across providers', () => {
+    const entries = [
+      { id: 'gemini', aliases: ['shared-alias'] },
+      { id: 'codex', aliases: ['shared-alias'] },
+    ] as const satisfies ReadonlyArray<Pick<ProviderCatalogEntry, 'id' | 'aliases'>>;
+
+    expect(() => buildProviderAliasMap(entries)).toThrow(/alias collision/i);
   });
 
   it('exposes callback port and display name capabilities', () => {

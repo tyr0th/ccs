@@ -1,40 +1,27 @@
-/**
- * Provider Sync Test
- *
- * Validates that backend CLIPROXY_PROFILES and UI CLIPROXY_PROVIDERS stay in sync.
- * This test catches mismatches when adding new providers.
- */
-
 import { describe, expect, test } from 'bun:test';
-import { CLIPROXY_PROFILES } from '../../../src/auth/profile-detector';
-
-// UI providers (must manually sync - this test validates the sync)
-const UI_CLIPROXY_PROVIDERS = [
-  'gemini',
-  'codex',
-  'agy',
-  'qwen',
-  'iflow',
-  'kiro',
-  'ghcp',
-  'claude',
-] as const;
+import {
+  CLIPROXY_PROVIDER_IDS,
+  getProviderCapabilities,
+} from '../../../src/cliproxy/provider-capabilities';
+import {
+  CLIPROXY_PROVIDERS,
+  getProviderMetadata,
+} from '../../../ui/src/lib/provider-config';
 
 describe('Provider Sync', () => {
-  test('backend CLIPROXY_PROFILES matches UI CLIPROXY_PROVIDERS', () => {
-    const backend = [...CLIPROXY_PROFILES].sort();
-    const ui = [...UI_CLIPROXY_PROVIDERS].sort();
-
+  test('backend provider IDs match UI provider IDs', () => {
+    const backend = [...CLIPROXY_PROVIDER_IDS].sort();
+    const ui = [...CLIPROXY_PROVIDERS].sort();
     expect(backend).toEqual(ui);
   });
 
-  test('both arrays have same length', () => {
-    expect(CLIPROXY_PROFILES.length).toBe(UI_CLIPROXY_PROVIDERS.length);
-  });
-
-  test('UI array contains all backend providers', () => {
-    for (const provider of CLIPROXY_PROFILES) {
-      expect(UI_CLIPROXY_PROVIDERS).toContain(provider);
+  test('UI metadata display names match backend capabilities', () => {
+    for (const provider of CLIPROXY_PROVIDER_IDS) {
+      const uiMetadata = getProviderMetadata(provider);
+      const backend = getProviderCapabilities(provider);
+      expect(uiMetadata?.displayName).toBe(backend.displayName);
+      expect(uiMetadata?.oauthFlow).toBe(backend.oauthFlow);
+      expect(uiMetadata?.assetPath).toBe(backend.logoAssetPath);
     }
   });
 });

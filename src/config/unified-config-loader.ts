@@ -22,7 +22,7 @@ import {
   DEFAULT_THINKING_CONFIG,
   DEFAULT_DASHBOARD_AUTH_CONFIG,
   DEFAULT_IMAGE_ANALYSIS_CONFIG,
-  DEFAULT_ATTRIBUTION_CONFIG,
+  normalizeAttributionResolverVersion,
   GlobalEnvConfig,
   ThinkingConfig,
   DashboardAuthConfig,
@@ -237,7 +237,7 @@ function validateCompositeVariants(config: UnifiedConfig): void {
 function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
   const defaults = createEmptyUnifiedConfig();
   const partialAttribution = partial.attribution as
-    | { resolverVersion?: 'v1' | 'v2'; resolver_version?: 'v1' | 'v2' }
+    | { resolverVersion?: unknown; resolver_version?: unknown }
     | undefined;
 
   return {
@@ -435,10 +435,9 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         partial.image_analysis?.provider_models ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models,
     },
     attribution: {
-      resolverVersion:
-        partialAttribution?.resolverVersion ??
-        partialAttribution?.resolver_version ??
-        DEFAULT_ATTRIBUTION_CONFIG.resolverVersion,
+      resolverVersion: normalizeAttributionResolverVersion(
+        partialAttribution?.resolverVersion ?? partialAttribution?.resolver_version
+      ),
     },
   };
 }
@@ -995,8 +994,7 @@ export function getImageAnalysisConfig(): ImageAnalysisConfig {
 export function getAttributionConfig(): AttributionConfig {
   const config = loadOrCreateUnifiedConfig();
   return {
-    resolverVersion:
-      config.attribution?.resolverVersion ?? DEFAULT_ATTRIBUTION_CONFIG.resolverVersion,
+    resolverVersion: normalizeAttributionResolverVersion(config.attribution?.resolverVersion),
   };
 }
 

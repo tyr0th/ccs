@@ -8,6 +8,7 @@
 import { getEffectiveApiKey, getEffectiveManagementSecret } from './auth-token-manager';
 import { getAllAccountsSummary } from './account-manager';
 import { createSourceResolver, type SourceMatchStep } from './source-resolver';
+import { AttributionHistoryStore } from './attribution-history';
 import {
   getProxyTarget,
   buildProxyUrl,
@@ -162,6 +163,7 @@ export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats |
     const resolverVersion = attributionConfig.resolverVersion;
     const accountsByProvider = getAllAccountsSummary();
     const sourceResolver = createSourceResolver(accountsByProvider, resolverVersion);
+    const attributionHistory = await AttributionHistoryStore.load();
 
     // Extract models, providers, and per-account stats from the nested API structure
     const requestsByModel: Record<string, number> = {};
@@ -189,8 +191,12 @@ export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats |
             // Aggregate per-account stats from request details
             if (modelData.details) {
               for (const detail of modelData.details) {
-                const source = detail.source || 'unknown';
-                const resolved = sourceResolver.resolve(source, provider);
+                const source = typeof detail.source === 'string' ? detail.source : '';
+                const historicalResolution = attributionHistory.resolve(source, provider);
+                const resolved = historicalResolution ?? sourceResolver.resolve(source, provider);
+                if (!historicalResolution) {
+                  attributionHistory.remember(source, provider, resolved);
+                }
                 const tokenCount = detail.tokens?.total_tokens ?? 0;
 
                 if (detail.failed) {
@@ -203,11 +209,11 @@ export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats |
                   const accountKey = resolved.accountKey;
                   if (!accountStats[accountKey]) {
                     accountStats[accountKey] = {
-                      source: accountKey,
+                      source: resolved.accountId ?? accountKey,
                       provider: resolved.provider ?? undefined,
                       accountId: resolved.accountId ?? undefined,
                       matchStep: resolved.matchStep,
-                      resolverVersion,
+                      resolverVersion: resolved.resolverVersion,
                       successCount: 0,
                       failureCount: 0,
                       totalTokens: 0,
@@ -243,6 +249,7 @@ export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats |
         }
       }
     }
+    await attributionHistory.persist();
 
     // Normalize the response to our interface
     return {

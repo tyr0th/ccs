@@ -46,6 +46,10 @@ function normalizeAlias(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+export function normalizeSourceForAttribution(value: string): string {
+  return normalizeSource(value);
+}
+
 function sanitizeForLog(value: string): string {
   return value.replace(/[^\x20-\x7E]/g, '?').slice(0, 120);
 }
@@ -159,6 +163,24 @@ function pickCandidate(
   };
 }
 
+function createUnmappedResolution(
+  source: string,
+  normalizedSource: string,
+  resolverVersion: AttributionResolverVersion
+): SourceResolution {
+  return {
+    source,
+    normalizedSource,
+    matched: false,
+    provider: null,
+    accountId: null,
+    accountKey: null,
+    matchStep: 'unmapped',
+    resolverVersion,
+    ambiguous: false,
+  };
+}
+
 export interface SourceResolver {
   resolve(source: string, providerHint?: string): SourceResolution;
 }
@@ -178,7 +200,7 @@ export function createSourceResolver(
       const candidate: ResolverAccountCandidate = {
         provider,
         account,
-        accountKey: account.email || account.id,
+        accountKey: `${provider}:${account.id}`,
         normalizedId: normalizeSource(account.id),
         normalizedEmail: account.email ? normalizeSource(account.email) : undefined,
         normalizedNickname: account.nickname ? normalizeSource(account.nickname) : undefined,
@@ -202,9 +224,9 @@ export function createSourceResolver(
 
   const resolveCandidate = (
     source: string,
+    normalizedSource: string,
     providerHint: string | undefined
   ): { selection: CandidateSelection | null; step: SourceMatchStep } => {
-    const normalizedSource = normalizeSource(source);
     const scopedCandidates = selectScope(providerHint);
 
     const idMatches = scopedCandidates.filter(
@@ -231,12 +253,24 @@ export function createSourceResolver(
       (candidate) =>
         candidate.normalizedNickname && candidate.normalizedNickname === normalizedSource
     );
+
+    if (nicknameMatches.length > 1 && !getCanonicalProvider(providerHint)) {
+      const matchedProviders = new Set(nicknameMatches.map((candidate) => candidate.provider));
+      if (matchedProviders.size > 1) {
+        return { selection: null, step: 'unmapped' };
+      }
+    }
+
     const nicknameSelection = pickCandidate(nicknameMatches, source, 'nickname');
     if (nicknameSelection) {
       return { selection: nicknameSelection, step: 'nickname' };
     }
 
     const sourceAliasKeys = deriveSourceAliasKeys(source, providerHint);
+    if (sourceAliasKeys.size === 0) {
+      return { selection: null, step: 'unmapped' };
+    }
+
     const aliasMatches = scopedCandidates.filter((candidate) => {
       for (const key of sourceAliasKeys) {
         if (candidate.aliasKeys.has(key)) {
@@ -245,6 +279,14 @@ export function createSourceResolver(
       }
       return false;
     });
+
+    if (aliasMatches.length > 1 && !getCanonicalProvider(providerHint)) {
+      const matchedProviders = new Set(aliasMatches.map((candidate) => candidate.provider));
+      if (matchedProviders.size > 1) {
+        return { selection: null, step: 'unmapped' };
+      }
+    }
+
     const aliasSelection = pickCandidate(aliasMatches, source, 'alias');
     if (aliasSelection) {
       return { selection: aliasSelection, step: 'alias' };
@@ -255,21 +297,14 @@ export function createSourceResolver(
 
   return {
     resolve(source: string, providerHint?: string): SourceResolution {
-      const normalizedSource = normalizeSource(source || 'unknown');
-      const { selection, step } = resolveCandidate(normalizedSource || 'unknown', providerHint);
+      const normalizedSource = normalizeSource(source);
+      if (normalizedSource.length === 0) {
+        return createUnmappedResolution(source, normalizedSource, resolverVersion);
+      }
 
+      const { selection, step } = resolveCandidate(source, normalizedSource, providerHint);
       if (!selection) {
-        return {
-          source,
-          normalizedSource,
-          matched: false,
-          provider: null,
-          accountId: null,
-          accountKey: null,
-          matchStep: 'unmapped',
-          resolverVersion,
-          ambiguous: false,
-        };
+        return createUnmappedResolution(source, normalizedSource, resolverVersion);
       }
 
       return {

@@ -680,6 +680,10 @@ export const DEFAULT_ATTRIBUTION_CONFIG: AttributionConfig = {
   resolverVersion: 'v2',
 };
 
+export function normalizeAttributionResolverVersion(value: unknown): AttributionResolverVersion {
+  return value === 'v1' || value === 'v2' ? value : DEFAULT_ATTRIBUTION_CONFIG.resolverVersion;
+}
+
 /**
  * Main unified configuration structure.
  * Stored in ~/.ccs/config.yaml

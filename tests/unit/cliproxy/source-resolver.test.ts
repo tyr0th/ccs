@@ -43,7 +43,7 @@ describe('source resolver', () => {
     expect(result.matched).toBe(true);
     expect(result.matchStep).toBe('account_id');
     expect(result.accountId).toBe('primary-id');
-    expect(result.accountKey).toBe('user@example.com');
+    expect(result.accountKey).toBe('codex:primary-id');
   });
 
   it('matches by email, then nickname in v2 mode', () => {
@@ -61,6 +61,19 @@ describe('source resolver', () => {
     const nicknameResult = resolver.resolve('team-main', 'gemini');
     expect(nicknameResult.matched).toBe(true);
     expect(nicknameResult.matchStep).toBe('nickname');
+  });
+
+  it('uses provider-qualified account keys to avoid cross-provider collisions', () => {
+    const accounts = createAccountsMap();
+    accounts.codex = [makeAccount('codex', 'shared-id', { email: 'shared@example.com' })];
+    accounts.gemini = [makeAccount('gemini', 'shared-id', { email: 'shared@example.com' })];
+
+    const resolver = createSourceResolver(accounts, 'v2');
+    const codexResult = resolver.resolve('shared-id', 'codex');
+    const geminiResult = resolver.resolve('shared-id', 'gemini');
+
+    expect(codexResult.accountKey).toBe('codex:shared-id');
+    expect(geminiResult.accountKey).toBe('gemini:shared-id');
   });
 
   it('matches normalized aliases in v2 mode', () => {
@@ -122,6 +135,32 @@ describe('source resolver', () => {
       'codex:alpha@example.com',
       'codex:beta@example.com',
     ]);
+  });
+
+  it('returns unmapped for cross-provider alias collisions without provider hint', () => {
+    const accounts = createAccountsMap();
+    accounts.codex = [makeAccount('codex', 'codex-1', { nickname: 'shared-team' })];
+    accounts.gemini = [makeAccount('gemini', 'gemini-1', { nickname: 'shared-team' })];
+
+    const resolver = createSourceResolver(accounts, 'v2');
+    const result = resolver.resolve('shared-team');
+
+    expect(result.matched).toBe(false);
+    expect(result.matchStep).toBe('unmapped');
+  });
+
+  it('does not map empty or whitespace sources', () => {
+    const accounts = createAccountsMap();
+    accounts.codex = [makeAccount('codex', 'codex-1', { email: 'dev@example.com' })];
+
+    const resolver = createSourceResolver(accounts, 'v2');
+    const emptyResult = resolver.resolve('');
+    const whitespaceResult = resolver.resolve('   ');
+
+    expect(emptyResult.matched).toBe(false);
+    expect(emptyResult.matchStep).toBe('unmapped');
+    expect(whitespaceResult.matched).toBe(false);
+    expect(whitespaceResult.matchStep).toBe('unmapped');
   });
 
   it('returns unmapped when no strategy matches', () => {
