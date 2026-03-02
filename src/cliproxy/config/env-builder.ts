@@ -21,6 +21,7 @@ import {
 } from './port-manager';
 import { getProviderSettingsPath } from './path-resolver';
 import {
+  canonicalizeModelIdForProvider,
   MODEL_ENV_VAR_KEYS,
   normalizeModelEnvVarsForProvider,
   normalizeModelIdForProvider,
@@ -563,10 +564,27 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
   for (const key of MODEL_ENV_VAR_KEYS) {
     const current = mergedEnv[key];
     if (typeof current !== 'string' || current.trim().length === 0) continue;
-    const canonical = normalizeModelIdForProvider(current, provider);
+    const canonical = canonicalizeModelIdForProvider(current, provider);
     if (canonical !== current) {
       mergedEnv[key] = canonical;
       mutated = true;
+    }
+  }
+
+  const presetsCandidate = parsed.presets;
+  if (Array.isArray(presetsCandidate)) {
+    for (const preset of presetsCandidate) {
+      if (!preset || typeof preset !== 'object') continue;
+      const presetRecord = preset as Record<string, unknown>;
+      for (const key of PRESET_MODEL_KEYS) {
+        const value = presetRecord[key];
+        if (typeof value !== 'string') continue;
+        const canonical = canonicalizeModelIdForProvider(value, provider);
+        if (canonical !== value) {
+          presetRecord[key] = canonical;
+          mutated = true;
+        }
+      }
     }
   }
 

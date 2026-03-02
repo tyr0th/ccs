@@ -190,6 +190,35 @@ function canonicalizeProfileSettings(profileOrVariant: string, settings: Setting
   return changed ? next : settings;
 }
 
+function writeSettingsAtomically(settingsPath: string, settings: Settings): void {
+  const tempPath = settingsPath + '.tmp';
+  fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
+  fs.renameSync(tempPath, settingsPath);
+}
+
+function loadCanonicalProfileSettings(
+  profileOrVariant: string,
+  settingsPath: string,
+  persist = false,
+  strictPersist = false
+): Settings {
+  const loaded = loadSettings(settingsPath);
+  const canonicalized = canonicalizeProfileSettings(profileOrVariant, loaded);
+
+  if (persist && canonicalized !== loaded) {
+    try {
+      writeSettingsAtomically(settingsPath, canonicalized);
+    } catch (error) {
+      if (strictPersist) {
+        throw error;
+      }
+      logRouteError(`Failed to persist canonicalized settings for ${profileOrVariant}`, error);
+    }
+  }
+
+  return canonicalized;
+}
+
 /**
  * Helper: Mask API keys in settings
  */
@@ -220,8 +249,8 @@ router.get('/:profile', (req: Request, res: Response): void => {
       return;
     }
 
+    const settings = loadCanonicalProfileSettings(profile, settingsPath, true);
     const stat = fs.statSync(settingsPath);
-    const settings = canonicalizeProfileSettings(profile, loadSettings(settingsPath));
     const masked = maskApiKeys(settings);
 
     res.json({
@@ -248,8 +277,8 @@ router.get('/:profile/raw', (req: Request, res: Response): void => {
       return;
     }
 
+    const settings = loadCanonicalProfileSettings(profile, settingsPath, true);
     const stat = fs.statSync(settingsPath);
-    const settings = canonicalizeProfileSettings(profile, loadSettings(settingsPath));
 
     res.json({
       profile,
@@ -370,7 +399,7 @@ router.get('/:profile/presets', (req: Request, res: Response): void => {
       return;
     }
 
-    const settings = canonicalizeProfileSettings(profile, loadSettings(settingsPath));
+    const settings = loadCanonicalProfileSettings(profile, settingsPath, true);
     res.json({ presets: settings.presets || [] });
   } catch (error) {
     respondInternalError(res, error, 'Internal server error.');
@@ -398,7 +427,7 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
       fs.writeFileSync(settingsPath, JSON.stringify({ env: {}, presets: [] }, null, 2) + '\n');
     }
 
-    const settings = loadSettings(settingsPath);
+    const settings = loadCanonicalProfileSettings(profile, settingsPath, false);
     settings.presets = settings.presets || [];
 
     // Check for duplicate name
@@ -424,13 +453,12 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
     };
 
     settings.presets.push(preset);
+    const canonicalizedSettings = canonicalizeProfileSettings(profile, settings);
+    writeSettingsAtomically(settingsPath, canonicalizedSettings);
 
-    // Atomic write: temp file + rename
-    const tempPath = settingsPath + '.tmp';
-    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
-    fs.renameSync(tempPath, settingsPath);
-
-    res.status(201).json({ preset });
+    const persistedPreset =
+      canonicalizedSettings.presets?.find((entry) => entry.name === name) || preset;
+    res.status(201).json({ preset: persistedPreset });
   } catch (error) {
     respondInternalError(res, error, 'Internal server error.');
   }
@@ -449,18 +477,15 @@ router.delete('/:profile/presets/:name', (req: Request, res: Response): void => 
       return;
     }
 
-    const settings = loadSettings(settingsPath);
+    const settings = loadCanonicalProfileSettings(profile, settingsPath, false);
     if (!settings.presets || !settings.presets.some((p) => p.name === name)) {
       res.status(404).json({ error: 'Preset not found' });
       return;
     }
 
     settings.presets = settings.presets.filter((p) => p.name !== name);
-
-    // Atomic write: temp file + rename
-    const tempPath = settingsPath + '.tmp';
-    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
-    fs.renameSync(tempPath, settingsPath);
+    const canonicalizedSettings = canonicalizeProfileSettings(profile, settings);
+    writeSettingsAtomically(settingsPath, canonicalizedSettings);
 
     res.json({ success: true });
   } catch (error) {

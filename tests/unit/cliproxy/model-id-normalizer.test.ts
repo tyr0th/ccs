@@ -78,6 +78,21 @@ describe('model-id-normalizer', () => {
         'claude-sonnet-4-6-thinking'
       );
     });
+
+    it('trims and canonicalizes provider model IDs with surrounding whitespace', () => {
+      expect(canonicalizeModelIdForProvider('  gpt-5.3-codex-high  ', 'codex')).toBe(
+        'gpt-5.3-codex'
+      );
+      expect(canonicalizeModelIdForProvider('  claude-sonnet-4.6-thinking  ', 'agy')).toBe(
+        'claude-sonnet-4-6'
+      );
+      expect(canonicalizeModelIdForProvider('  claude-sonnet-4-6-thinking  ', 'claude')).toBe(
+        'claude-sonnet-4-6-thinking'
+      );
+      expect(normalizeModelIdForRouting('  claude-sonnet-4.6-thinking  ', null)).toBe(
+        'claude-sonnet-4-6'
+      );
+    });
   });
 
   describe('env normalization', () => {

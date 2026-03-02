@@ -45,7 +45,7 @@ interface OAuthModelAliasEntry {
 const GEMINI_MINOR_COMPAT_RANGE = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const DEPRECATED_ANTIGRAVITY_ALIAS_PREFIX = 'gemini-claude-';
 const UPSTREAM_CLAUDE_ALIAS_PREFIX = 'claude-';
-const DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_ALIAS = 'claude-sonnet-4-6-thinking';
+const DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_REGEX = /^claude-sonnet-4(?:[.-])6-thinking$/i;
 const CANONICAL_ANTIGRAVITY_SONNET_46_ALIAS = 'claude-sonnet-4-6';
 
 /**
@@ -116,7 +116,7 @@ function normalizeAntigravityAlias(rawAlias: string): string {
     return normalizeAntigravityAlias(migratedPrefix);
   }
 
-  if (normalized.toLowerCase() === DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_ALIAS) {
+  if (DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_REGEX.test(normalized)) {
     return CANONICAL_ANTIGRAVITY_SONNET_46_ALIAS;
   }
 

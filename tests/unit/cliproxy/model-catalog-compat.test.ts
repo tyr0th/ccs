@@ -14,4 +14,12 @@ describe('model-catalog compatibility lookups', () => {
     expect(supportsThinking('agy', 'claude-opus-4.6-thinking')).toBe(true);
     expect(supportsThinking('agy', 'claude-sonnet-4.5')).toBe(false);
   });
+
+  it('maps legacy sonnet 4.6 thinking aliases to canonical agy model', () => {
+    const dottedLegacy = findModel('agy', 'claude-sonnet-4.6-thinking');
+    const hyphenLegacy = findModel('agy', 'claude-sonnet-4-6-thinking');
+
+    expect(dottedLegacy?.id).toBe('claude-sonnet-4-6');
+    expect(hyphenLegacy?.id).toBe('claude-sonnet-4-6');
+  });
 });

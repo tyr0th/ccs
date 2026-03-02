@@ -25,6 +25,10 @@ const DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_REGEX =
 const CANONICAL_ANTIGRAVITY_SONNET_46_MODEL = 'claude-sonnet-4-6';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 
+function trimModelId(model: string): string {
+  return model.trim();
+}
+
 /**
  * Extract provider segment from `/api/provider/{provider}` request paths.
  *
@@ -101,8 +105,9 @@ export function normalizeDeprecatedAntigravityModelAliases(model: string): strin
  * // => 'claude-opus-4.6-thinking'
  */
 export function normalizeModelIdForProvider(model: string, provider: ProviderLike): string {
-  if (!isAntigravityProvider(provider)) return model;
-  const normalizedDottedVersion = normalizeClaudeDottedMajorMinor(model);
+  const trimmedModel = trimModelId(model);
+  if (!isAntigravityProvider(provider)) return trimmedModel;
+  const normalizedDottedVersion = normalizeClaudeDottedMajorMinor(trimmedModel);
   return normalizeDeprecatedAntigravityModelAliases(normalizedDottedVersion);
 }
 
@@ -112,7 +117,10 @@ export function normalizeModelIdForProvider(model: string, provider: ProviderLik
  * - Antigravity: normalize dotted/historical aliases.
  */
 export function canonicalizeModelIdForProvider(model: string, provider: ProviderLike): string {
-  const withoutCodexSuffix = isCodexProvider(provider) ? stripCodexEffortSuffix(model) : model;
+  const trimmedModel = trimModelId(model);
+  const withoutCodexSuffix = isCodexProvider(provider)
+    ? stripCodexEffortSuffix(trimmedModel)
+    : trimmedModel;
   return normalizeModelIdForProvider(withoutCodexSuffix, provider);
 }
 
@@ -131,14 +139,15 @@ export function canonicalizeModelIdForProvider(model: string, provider: Provider
  * // => 'claude-sonnet-4.6'
  */
 export function normalizeModelIdForRouting(model: string, provider: ProviderLike): string {
+  const trimmedModel = trimModelId(model);
   if (isAntigravityProvider(provider)) {
-    return normalizeModelIdForProvider(model, provider);
+    return normalizeModelIdForProvider(trimmedModel, provider);
   }
   // Explicit non-AGY provider routes should pass through unchanged.
   if (typeof provider === 'string' && provider.trim().length > 0) {
-    return model;
+    return trimmedModel;
   }
-  const normalizedThinking = normalizeClaudeDottedThinkingMajorMinor(model);
+  const normalizedThinking = normalizeClaudeDottedThinkingMajorMinor(trimmedModel);
   return normalizeDeprecatedAntigravityModelAliases(normalizedThinking);
 }
 

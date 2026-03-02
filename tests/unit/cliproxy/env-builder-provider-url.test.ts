@@ -245,6 +245,15 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
             ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4.6-thinking',
             ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-sonnet-4-5',
           },
+          presets: [
+            {
+              name: 'legacy',
+              default: 'claude-sonnet-4-6-thinking',
+              opus: 'claude-opus-4.6-thinking',
+              sonnet: 'claude-sonnet-4.6-thinking',
+              haiku: 'claude-sonnet-4-5',
+            },
+          ],
         },
         null,
         2
@@ -255,11 +264,63 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
 
     const repaired = JSON.parse(fs.readFileSync(agySettingsPath, 'utf-8')) as {
       env?: Record<string, string>;
+      presets?: Array<Record<string, string>>;
     };
     expect(repaired.env?.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6(8192)');
     expect(repaired.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
     expect(repaired.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6');
     expect(repaired.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-sonnet-4-5');
+    expect(repaired.presets?.[0]?.default).toBe('claude-sonnet-4-6');
+    expect(repaired.presets?.[0]?.opus).toBe('claude-opus-4-6-thinking');
+    expect(repaired.presets?.[0]?.sonnet).toBe('claude-sonnet-4-6');
+    expect(repaired.presets?.[0]?.haiku).toBe('claude-sonnet-4-5');
+  });
+
+  it('migrates codex effort-suffixed preset IDs during ensureProviderSettings', () => {
+    process.env.CCS_HOME = tempHome;
+    const codexSettingsPath = path.join(tempHome, '.ccs', 'codex.settings.json');
+    fs.mkdirSync(path.dirname(codexSettingsPath), { recursive: true });
+    fs.writeFileSync(
+      codexSettingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
+            ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+            ANTHROPIC_MODEL: ' gpt-5.3-codex-xhigh ',
+            ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex-xhigh',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.3-codex-high',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5-mini-medium',
+          },
+          presets: [
+            {
+              name: 'legacy',
+              default: 'gpt-5.3-codex-xhigh',
+              opus: 'gpt-5.3-codex-xhigh',
+              sonnet: 'gpt-5.3-codex-high',
+              haiku: 'gpt-5-mini-medium',
+            },
+          ],
+        },
+        null,
+        2
+      )
+    );
+
+    ensureProviderSettings('codex');
+
+    const repaired = JSON.parse(fs.readFileSync(codexSettingsPath, 'utf-8')) as {
+      env?: Record<string, string>;
+      presets?: Array<Record<string, string>>;
+    };
+    expect(repaired.env?.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
+    expect(repaired.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex');
+    expect(repaired.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex');
+    expect(repaired.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini');
+    expect(repaired.presets?.[0]?.default).toBe('gpt-5.3-codex');
+    expect(repaired.presets?.[0]?.opus).toBe('gpt-5.3-codex');
+    expect(repaired.presets?.[0]?.sonnet).toBe('gpt-5.3-codex');
+    expect(repaired.presets?.[0]?.haiku).toBe('gpt-5-mini');
   });
 
   it('recovers malformed provider settings files by writing defaults and backup copy', () => {
