@@ -120,6 +120,18 @@ describe('model-pricing', () => {
       expect(opus46.inputPerMillion).toBe(5.0);
       expect(opus46.outputPerMillion).toBe(25.0);
     });
+
+    it('should match date-stamped thinking Claude Opus 4.6 to correct pricing', () => {
+      const opus46 = getModelPricing('claude-opus-4-6-20260101-thinking');
+      expect(opus46.inputPerMillion).toBe(5.0);
+      expect(opus46.outputPerMillion).toBe(25.0);
+    });
+
+    it('should match provider-prefixed date-stamped thinking model to correct pricing', () => {
+      const opus46 = getModelPricing('anthropic/claude-opus-4-6-20260101-thinking');
+      expect(opus46.inputPerMillion).toBe(5.0);
+      expect(opus46.outputPerMillion).toBe(25.0);
+    });
   });
 
   describe('calculateCost', () => {
@@ -207,6 +219,10 @@ describe('model-pricing', () => {
 
     it('should return true for deterministic qwen3-coder alias', () => {
       expect(hasCustomPricing('qwen3-coder')).toBe(true);
+    });
+
+    it('should not treat date-stamped non-Claude IDs as deterministic aliases', () => {
+      expect(hasCustomPricing('qwen3-32b-20260101')).toBe(false);
     });
 
     it('should return false for unknown models', () => {

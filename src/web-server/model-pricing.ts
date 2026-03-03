@@ -734,7 +734,7 @@ const UNKNOWN_MODEL_PRICING: ModelPricing = {
 
 /**
  * Normalize model name for matching
- * Handles variations like provider prefixes, case differences, and date suffixes
+ * Handles variations like provider prefixes and case differences
  */
 function normalizeModelName(model: string): string {
   // Remove provider prefixes (e.g., "anthropic/claude-..." -> "claude-...")
@@ -747,10 +747,14 @@ function normalizeModelName(model: string): string {
 
 /**
  * Strip trailing date suffix from model name (e.g., "-20260101")
- * Only strips 8-digit YYYYMMDD suffixes at the end of the string.
+ * Claude session IDs can place dates either at the end or before "-thinking".
  */
 function stripDateSuffix(model: string): string {
-  return model.replace(/-\d{8}$/, '');
+  if (!model.startsWith('claude-')) {
+    return model;
+  }
+
+  return model.replace(/-\d{8}(?=-thinking(?:$|:))/g, '').replace(/-\d{8}(?=$|:)/g, '');
 }
 
 const NORMALIZED_PRICING_REGISTRY: Record<string, ModelPricing> = Object.entries(
