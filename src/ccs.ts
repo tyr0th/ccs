@@ -30,6 +30,7 @@ import { getGlobalEnvConfig } from './config/unified-config-loader';
 import { ensureProfileHooks as ensureImageAnalyzerHooks } from './utils/hooks/image-analyzer-profile-hook-injector';
 import { getImageAnalysisHookEnv } from './utils/hooks';
 import { fail, info, warn } from './utils/ui';
+import { COPILOT_SUBCOMMAND_TOKENS } from './copilot/constants';
 
 // Import centralized error handling
 import { handleError, runCleanup } from './errors';
@@ -573,28 +574,7 @@ async function main(): Promise<void> {
 
   // Special case: copilot command (GitHub Copilot integration)
   // Only route to command handler for known subcommands, otherwise treat as profile
-  const COPILOT_SUBCOMMANDS = [
-    'auth',
-    'status',
-    'models',
-    'usage',
-    'start',
-    'stop',
-    'enable',
-    'disable',
-    '--auth',
-    '--status',
-    '--models',
-    '--usage',
-    '--start',
-    '--stop',
-    '--enable',
-    '--disable',
-    'help',
-    '--help',
-    '-h',
-  ];
-  if (firstArg === 'copilot' && args.length > 1 && COPILOT_SUBCOMMANDS.includes(args[1])) {
+  if (firstArg === 'copilot' && args.length > 1 && COPILOT_SUBCOMMAND_TOKENS.includes(args[1])) {
     // `ccs copilot <subcommand>` - route to copilot command handler
     const { handleCopilotCommand } = await import('./commands/copilot-command');
     const exitCode = await handleCopilotCommand(args.slice(1));

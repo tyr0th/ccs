@@ -12,8 +12,13 @@ import * as http from 'http';
 import { CopilotDaemonStatus } from './types';
 import { CopilotConfig } from '../config/unified-config-types';
 import { getCopilotDir, getCopilotApiBinPath } from './copilot-package-manager';
+import { verifyCopilotDaemonOwnership } from './daemon-process-ownership';
 
-const PID_FILE = path.join(getCopilotDir(), 'daemon.pid');
+const DAEMON_HEALTH_MARKER = 'server running';
+
+function getPidFilePath(): string {
+  return path.join(getCopilotDir(), 'daemon.pid');
+}
 
 /**
  * Check if copilot-api daemon is running on the specified port.
@@ -43,7 +48,7 @@ export async function isDaemonRunning(port: number): Promise<boolean> {
             return;
           }
 
-          resolve(body.trim().toLowerCase().includes('server running'));
+          resolve(body.trim().toLowerCase().includes(DAEMON_HEALTH_MARKER));
         });
       }
     );
@@ -79,9 +84,10 @@ export async function getDaemonStatus(port: number): Promise<CopilotDaemonStatus
  * Read PID from file.
  */
 function getPidFromFile(): number | null {
+  const pidFile = getPidFilePath();
   try {
-    if (fs.existsSync(PID_FILE)) {
-      const content = fs.readFileSync(PID_FILE, 'utf8').trim();
+    if (fs.existsSync(pidFile)) {
+      const content = fs.readFileSync(pidFile, 'utf8').trim();
       const pid = parseInt(content, 10);
       return isNaN(pid) ? null : pid;
     }
@@ -95,12 +101,13 @@ function getPidFromFile(): number | null {
  * Write PID to file.
  */
 function writePidToFile(pid: number): void {
+  const pidFile = getPidFilePath();
   try {
-    const dir = path.dirname(PID_FILE);
+    const dir = path.dirname(pidFile);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
-    fs.writeFileSync(PID_FILE, pid.toString(), { mode: 0o600 });
+    fs.writeFileSync(pidFile, pid.toString(), { mode: 0o600 });
   } catch {
     // Ignore errors
   }
@@ -110,9 +117,10 @@ function writePidToFile(pid: number): void {
  * Remove PID file.
  */
 function removePidFile(): void {
+  const pidFile = getPidFilePath();
   try {
-    if (fs.existsSync(PID_FILE)) {
-      fs.unlinkSync(PID_FILE);
+    if (fs.existsSync(pidFile)) {
+      fs.unlinkSync(pidFile);
     }
   } catch {
     // Ignore errors
@@ -250,6 +258,25 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
   }
 
   try {
+    const ownership = verifyCopilotDaemonOwnership(pid);
+    if (ownership === 'not-running') {
+      removePidFile();
+      return { success: true };
+    }
+
+    if (ownership === 'not-owned') {
+      // PID was reused by an unrelated process.
+      removePidFile();
+      return { success: true };
+    }
+
+    if (ownership === 'unknown') {
+      return {
+        success: false,
+        error: `Refusing to stop PID ${pid}: unable to verify daemon ownership`,
+      };
+    }
+
     // Send SIGTERM to the process
     process.kill(pid, 'SIGTERM');
 

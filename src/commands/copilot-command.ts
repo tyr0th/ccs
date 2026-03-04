@@ -16,23 +16,13 @@ import {
 import { loadOrCreateUnifiedConfig, saveUnifiedConfig } from '../config/unified-config-loader';
 import { DEFAULT_COPILOT_CONFIG } from '../config/unified-config-types';
 import { ok, fail, info, color } from '../utils/ui';
+import { normalizeCopilotSubcommand } from '../copilot/constants';
 
 /**
  * Handle copilot subcommand.
  */
 export async function handleCopilotCommand(args: string[]): Promise<number> {
-  const subcommandAliasMap: Record<string, string> = {
-    '--auth': 'auth',
-    '--status': 'status',
-    '--models': 'models',
-    '--usage': 'usage',
-    '--start': 'start',
-    '--stop': 'stop',
-    '--enable': 'enable',
-    '--disable': 'disable',
-  };
-  const rawSubcommand = args[0];
-  const subcommand = (rawSubcommand && subcommandAliasMap[rawSubcommand]) || rawSubcommand;
+  const subcommand = normalizeCopilotSubcommand(args[0]);
 
   switch (subcommand) {
     case 'auth':
@@ -87,6 +77,11 @@ function handleHelp(): number {
   console.log('  2. ccs copilot enable   # Enable integration');
   console.log('  3. ccs copilot start    # Start daemon');
   console.log('  4. ccs copilot usage    # Check quota usage');
+  console.log('');
+  console.log('Flag aliases:');
+  console.log(
+    '  ccs copilot --auth | --status | --models | --usage | --start | --stop | --enable | --disable'
+  );
   console.log('');
   console.log('Or use the web UI: ccs config → Copilot tab');
   console.log('');

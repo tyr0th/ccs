@@ -95,7 +95,7 @@ export async function executeCopilotProfile(
   if (!isCopilotApiInstalled()) {
     console.error(fail('copilot-api is not installed.'));
     console.error('');
-    console.error('Install with: ccs copilot --install');
+    console.error('Install/repair by running: ccs copilot start');
     return 1;
   }
 
