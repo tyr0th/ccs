@@ -467,6 +467,34 @@ function selectBestAccount(accounts: AccountInfo[]): AccountInfo | null {
         └─ Droid: config file (~/.factory/settings.json)
 ```
 
+### Anthropic Direct API Key
+
+```
++===========================================================================+
+|                  Anthropic Direct API Key (Native Auth)                   |
++===========================================================================+
+
+  1. User creates profile: ccs api create --preset anthropic
+        |
+        v
+  2. Key stored in ~/.ccs/<profile>.settings.json
+        |  env: { ANTHROPIC_API_KEY: "sk-ant-..." }
+        |  (NO ANTHROPIC_BASE_URL, NO ANTHROPIC_AUTH_TOKEN)
+        v
+  3. Profile detection: settings-based
+        |
+        v
+  4. Key passed via ANTHROPIC_API_KEY env var
+        |  Claude CLI uses native endpoint (api.anthropic.com)
+        v
+  5. Claude CLI authenticates with x-api-key header
+
+  Detection logic (profile-writer.ts):
+    - apiKey.startsWith('sk-ant-') -> native mode
+    - baseUrl.includes('api.anthropic.com') -> native mode
+    - Otherwise -> proxy mode (existing behavior)
+```
+
 ---
 
 ## Image Analysis Hook Flow (v7.34)

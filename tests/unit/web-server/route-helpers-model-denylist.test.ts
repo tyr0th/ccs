@@ -211,4 +211,52 @@ describe('route-helpers AGY denylist', () => {
     expect(persisted.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('deepseek-v3.2');
     expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('qwen3-coder-plus');
   });
+
+  it('creates native Anthropic settings without base URL', () => {
+    createSettingsFile('anthropic-direct', '', 'sk-ant-api03-test', {
+      model: 'claude-sonnet-4-5-20250929',
+    });
+
+    const settingsPath = path.join(tempHome, '.ccs', 'anthropic-direct.settings.json');
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
+      env: Record<string, string>;
+    };
+
+    expect(persisted.env.ANTHROPIC_API_KEY).toBe('sk-ant-api03-test');
+    expect(persisted.env.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect(persisted.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+  });
+
+  it('switches proxy settings to native Anthropic mode on update', () => {
+    const settingsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(settingsDir, { recursive: true });
+    const settingsPath = path.join(settingsDir, 'anthropic-update.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
+            ANTHROPIC_AUTH_TOKEN: 'proxy-token',
+            ANTHROPIC_MODEL: 'claude-sonnet-4-5-20250929',
+          },
+        },
+        null,
+        2
+      ) + '\n'
+    );
+
+    updateSettingsFile('anthropic-update', {
+      baseUrl: '',
+      apiKey: 'sk-ant-api03-test',
+    });
+
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
+      env: Record<string, string>;
+    };
+
+    expect(persisted.env.ANTHROPIC_API_KEY).toBe('sk-ant-api03-test');
+    expect(persisted.env.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect(persisted.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+  });
 });

@@ -82,6 +82,19 @@ function canonicalizeModelForProvider(
   return canonicalizeModelIdForProvider(value, provider);
 }
 
+function isOpenRouterUrl(baseUrl: string): boolean {
+  return baseUrl.toLowerCase().includes('openrouter.ai');
+}
+
+export function isAnthropicDirectProfile(
+  baseUrl: string | undefined | null,
+  apiKey: string | undefined | null
+): boolean {
+  const normalizedBaseUrl = baseUrl?.trim().toLowerCase() || '';
+  const normalizedApiKey = apiKey?.trim() || '';
+  return normalizedApiKey.startsWith('sk-ant-') || normalizedBaseUrl.includes('api.anthropic.com');
+}
+
 /**
  * Read config safely with fallback.
  * Uses loadConfigSafe which supports both unified (config.yaml) and legacy (config.json).
@@ -116,7 +129,11 @@ export function isConfigured(profileName: string, config: Config): boolean {
     if (!fs.existsSync(expandedPath)) return false;
 
     const settings = loadSettings(expandedPath);
-    return !!(settings.env?.ANTHROPIC_BASE_URL && settings.env?.ANTHROPIC_AUTH_TOKEN);
+    // Proxy mode: BASE_URL + AUTH_TOKEN; Native mode: ANTHROPIC_API_KEY only
+    return !!(
+      (settings.env?.ANTHROPIC_BASE_URL && settings.env?.ANTHROPIC_AUTH_TOKEN) ||
+      settings.env?.ANTHROPIC_API_KEY
+    );
   } catch {
     return false;
   }
@@ -165,11 +182,19 @@ export function createSettingsFile(
     baseUrl,
     model: canonicalModel,
   });
+  const normalizedBaseUrl = baseUrl.trim();
+  const normalizedApiKey = apiKey.trim();
+  const isNative = isAnthropicDirectProfile(normalizedBaseUrl, normalizedApiKey);
 
   const settings: Settings = {
     env: {
-      ANTHROPIC_BASE_URL: baseUrl,
-      ANTHROPIC_AUTH_TOKEN: apiKey,
+      ...(isNative
+        ? { ANTHROPIC_API_KEY: normalizedApiKey }
+        : {
+            ANTHROPIC_BASE_URL: normalizedBaseUrl,
+            ANTHROPIC_AUTH_TOKEN: normalizedApiKey,
+            ...(isOpenRouterUrl(normalizedBaseUrl) && { ANTHROPIC_API_KEY: '' }),
+          }),
       ...(canonicalModel && { ANTHROPIC_MODEL: canonicalModel }),
       ...(canonicalOpusModel && { ANTHROPIC_DEFAULT_OPUS_MODEL: canonicalOpusModel }),
       ...(canonicalSonnetModel && { ANTHROPIC_DEFAULT_SONNET_MODEL: canonicalSonnetModel }),
@@ -205,8 +230,23 @@ export function updateSettingsFile(
   }
 
   const settings = loadSettings(settingsPath);
+  const currentBaseUrl = settings.env?.ANTHROPIC_BASE_URL?.trim() || '';
+  const currentApiKey =
+    settings.env?.ANTHROPIC_API_KEY?.trim() || settings.env?.ANTHROPIC_AUTH_TOKEN?.trim() || '';
+  const nextBaseUrl = updates.baseUrl !== undefined ? updates.baseUrl.trim() : currentBaseUrl;
+  const nextApiKey = updates.apiKey !== undefined ? updates.apiKey.trim() : currentApiKey;
+  const isNative = isAnthropicDirectProfile(nextBaseUrl, nextApiKey);
+
+  if (!nextApiKey) {
+    throw new ValidationError('apiKey cannot be empty', 'apiKey');
+  }
+
+  if (!isNative && nextBaseUrl.length === 0) {
+    throw new ValidationError('baseUrl cannot be empty', 'baseUrl');
+  }
+
   const providerForValidation =
-    resolveProviderForModelCanonicalization(updates.baseUrl, updates.provider) ??
+    resolveProviderForModelCanonicalization(nextBaseUrl, updates.provider) ??
     resolveProviderForModelCanonicalization(
       settings.env?.ANTHROPIC_BASE_URL,
       updates.provider ?? settings.env?.CCS_DROID_PROVIDER
@@ -243,14 +283,19 @@ export function updateSettingsFile(
     throw new ValidationError(deniedReason, 'model');
   }
 
-  if (updates.baseUrl) {
-    settings.env = settings.env || {};
-    settings.env.ANTHROPIC_BASE_URL = updates.baseUrl;
-  }
-
-  if (updates.apiKey) {
-    settings.env = settings.env || {};
-    settings.env.ANTHROPIC_AUTH_TOKEN = updates.apiKey;
+  settings.env = settings.env || {};
+  if (isNative) {
+    delete settings.env.ANTHROPIC_BASE_URL;
+    delete settings.env.ANTHROPIC_AUTH_TOKEN;
+    settings.env.ANTHROPIC_API_KEY = nextApiKey;
+  } else {
+    settings.env.ANTHROPIC_BASE_URL = nextBaseUrl;
+    settings.env.ANTHROPIC_AUTH_TOKEN = nextApiKey;
+    if (isOpenRouterUrl(nextBaseUrl)) {
+      settings.env.ANTHROPIC_API_KEY = '';
+    } else {
+      delete settings.env.ANTHROPIC_API_KEY;
+    }
   }
 
   if (updates.model !== undefined) {
@@ -299,7 +344,7 @@ export function updateSettingsFile(
     settings.env = settings.env || {};
     const resolvedProvider = resolveDroidProvider({
       provider: updates.provider ?? settings.env.CCS_DROID_PROVIDER,
-      baseUrl: updates.baseUrl ?? settings.env.ANTHROPIC_BASE_URL,
+      baseUrl: nextBaseUrl,
       model: canonicalModel ?? settings.env.ANTHROPIC_MODEL,
     });
     settings.env.CCS_DROID_PROVIDER = resolvedProvider;

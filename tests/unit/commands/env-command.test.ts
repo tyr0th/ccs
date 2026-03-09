@@ -134,6 +134,18 @@ describe('env-command', () => {
       expect(result).toEqual({});
     });
 
+    it('maps native Anthropic API key to OpenAI format', () => {
+      const result = transformToOpenAI({
+        ANTHROPIC_API_KEY: 'sk-ant-api03-test',
+        ANTHROPIC_MODEL: 'claude-sonnet-4-5-20250929',
+      });
+
+      expect(result).toEqual({
+        OPENAI_API_KEY: 'sk-ant-api03-test',
+        OPENAI_MODEL: 'claude-sonnet-4-5-20250929',
+      });
+    });
+
     it('only extracts relevant vars', () => {
       const result = transformToOpenAI({
         ANTHROPIC_BASE_URL: 'http://localhost:8317',

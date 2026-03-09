@@ -10,7 +10,11 @@ import {
   detectCloudSyncPath,
 } from './utils/config-manager';
 import { expandPath } from './utils/helpers';
-import { validateGlmKey, validateMiniMaxKey } from './utils/api-key-validator';
+import {
+  validateGlmKey,
+  validateMiniMaxKey,
+  validateAnthropicKey,
+} from './utils/api-key-validator';
 import { ErrorManager } from './utils/error-manager';
 import {
   execClaudeWithCLIProxy,
@@ -1044,6 +1048,30 @@ async function main(): Promise<void> {
         }
       }
 
+      // Pre-flight validation for Anthropic direct profiles (ANTHROPIC_API_KEY + no BASE_URL)
+      {
+        const preflightSettingsPath = getSettingsPath(profileInfo.name);
+        const preflightSettings = loadSettings(preflightSettingsPath);
+        const anthropicApiKey = preflightSettings.env?.['ANTHROPIC_API_KEY'];
+        const hasBaseUrl = !!preflightSettings.env?.['ANTHROPIC_BASE_URL'];
+        if (anthropicApiKey && !hasBaseUrl) {
+          const validation = await validateAnthropicKey(anthropicApiKey);
+          if (!validation.valid) {
+            console.error('');
+            console.error(fail(validation.error || 'API key validation failed'));
+            if (validation.suggestion) {
+              console.error('');
+              console.error(validation.suggestion);
+            }
+            console.error('');
+            console.error(
+              info(`To skip validation: CCS_SKIP_PREFLIGHT=1 ccs ${profileInfo.name} "prompt"`)
+            );
+            process.exit(1);
+          }
+        }
+      }
+
       // Check if this is GLMT profile (requires proxy)
       if (profileInfo.name === 'glmt') {
         if (resolvedTarget !== 'claude') {
@@ -1103,14 +1131,17 @@ async function main(): Promise<void> {
             console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
             process.exit(1);
           }
+          const directAnthropicBaseUrl =
+            settingsEnv['ANTHROPIC_BASE_URL'] ||
+            (settingsEnv['ANTHROPIC_API_KEY'] ? 'https://api.anthropic.com' : '');
           const creds: TargetCredentials = {
             profile: profileInfo.name,
-            baseUrl: settingsEnv['ANTHROPIC_BASE_URL'] || '',
-            apiKey: settingsEnv['ANTHROPIC_AUTH_TOKEN'] || '',
+            baseUrl: directAnthropicBaseUrl,
+            apiKey: settingsEnv['ANTHROPIC_AUTH_TOKEN'] || settingsEnv['ANTHROPIC_API_KEY'] || '',
             model: settingsEnv['ANTHROPIC_MODEL'],
             provider: resolveDroidProvider({
               provider: settingsEnv['CCS_DROID_PROVIDER'] || settingsEnv['DROID_PROVIDER'],
-              baseUrl: settingsEnv['ANTHROPIC_BASE_URL'],
+              baseUrl: directAnthropicBaseUrl,
               model: settingsEnv['ANTHROPIC_MODEL'],
             }),
             reasoningOverride: droidReasoningOverride,

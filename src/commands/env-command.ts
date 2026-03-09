@@ -55,7 +55,7 @@ export function formatExportLine(shell: ShellType, key: string, value: string): 
  * can discover the model without additional configuration. */
 export function transformToOpenAI(envVars: Record<string, string>): Record<string, string> {
   const baseUrl = envVars['ANTHROPIC_BASE_URL'] || '';
-  const apiKey = envVars['ANTHROPIC_AUTH_TOKEN'] || '';
+  const apiKey = envVars['ANTHROPIC_AUTH_TOKEN'] || envVars['ANTHROPIC_API_KEY'] || '';
   const model = envVars['ANTHROPIC_MODEL'] || '';
   const result: Record<string, string> = {};
   if (apiKey) result['OPENAI_API_KEY'] = apiKey;

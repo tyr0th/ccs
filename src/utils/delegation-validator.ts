@@ -69,16 +69,17 @@ export class DelegationValidator {
     }
 
     // Validate API key exists and is not default
-    const apiKey = settings.env?.ANTHROPIC_AUTH_TOKEN;
+    // Support both proxy mode (ANTHROPIC_AUTH_TOKEN) and native mode (ANTHROPIC_API_KEY)
+    const apiKey = settings.env?.ANTHROPIC_AUTH_TOKEN || settings.env?.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
       return {
         valid: false,
         error: `API key not configured for ${profileName}`,
         suggestion:
-          `Missing ANTHROPIC_AUTH_TOKEN in settings.\n\n` +
+          `Missing ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY in settings.\n\n` +
           `Edit: ${settingsPath}\n` +
-          `Set: env.ANTHROPIC_AUTH_TOKEN to your API key`,
+          `Set: env.ANTHROPIC_AUTH_TOKEN (proxy) or env.ANTHROPIC_API_KEY (direct) to your API key`,
       };
     }
 

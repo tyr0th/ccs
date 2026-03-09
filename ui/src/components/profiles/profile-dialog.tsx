@@ -19,13 +19,18 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const optionalUrlSchema = z
+  .string()
+  .refine((value) => value.trim().length === 0 || z.string().url().safeParse(value).success, {
+    message: 'Invalid URL',
+  });
 
 const schema = z.object({
   name: z
     .string()
     .min(1, 'Name is required')
     .regex(/^[a-zA-Z][a-zA-Z0-9._-]*$/, 'Invalid profile name'),
-  baseUrl: z.string().url('Invalid URL'),
+  baseUrl: optionalUrlSchema,
   apiKey: z.string().min(10, 'API key must be at least 10 characters'),
   model: z.string().optional(),
   opusModel: z.string().optional(),

@@ -166,3 +166,76 @@ export async function validateMiniMaxKey(
     timeoutMs
   );
 }
+
+/** Validate Anthropic direct API key using x-api-key header (not Bearer) */
+export async function validateAnthropicKey(
+  apiKey: string,
+  timeoutMs = 2000
+): Promise<ValidationResult> {
+  if (process.env.CCS_SKIP_PREFLIGHT === '1') {
+    return { valid: true };
+  }
+
+  if (!apiKey || DEFAULT_PLACEHOLDERS.includes(apiKey.toUpperCase())) {
+    return {
+      valid: false,
+      error: 'Anthropic API key not configured',
+      suggestion: 'Set ANTHROPIC_API_KEY in your profile settings.json',
+    };
+  }
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    const safeResolve = (result: ValidationResult) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(result);
+    };
+
+    const options: https.RequestOptions = {
+      hostname: 'api.anthropic.com',
+      port: 443,
+      path: '/v1/models',
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'User-Agent': 'CCS-Preflight/1.0',
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      clearTimeout(timeoutId);
+
+      if (res.statusCode === 200) {
+        safeResolve({ valid: true });
+      } else if (res.statusCode === 401 || res.statusCode === 403) {
+        safeResolve({
+          valid: false,
+          error: 'Anthropic API key rejected',
+          suggestion:
+            'Your key may have expired. To fix:\n' +
+            '  1. Go to console.anthropic.com/settings/keys and regenerate your API key\n' +
+            '  2. Update ANTHROPIC_API_KEY in your profile settings.json\n' +
+            '  3. Or run: ccs api create --preset anthropic',
+        });
+      } else {
+        safeResolve({ valid: true });
+      }
+
+      res.resume();
+    });
+
+    req.on('error', () => {
+      clearTimeout(timeoutId);
+      safeResolve({ valid: true });
+    });
+
+    const timeoutId = setTimeout(() => {
+      req.destroy();
+      safeResolve({ valid: true });
+    }, timeoutMs);
+
+    req.end();
+  });
+}

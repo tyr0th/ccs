@@ -49,7 +49,7 @@ export function isApiProfileConfigured(apiName: string): boolean {
     if (!fs.existsSync(settingsPath)) return false;
 
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    const token = settings?.env?.ANTHROPIC_AUTH_TOKEN || '';
+    const token = settings?.env?.ANTHROPIC_AUTH_TOKEN || settings?.env?.ANTHROPIC_API_KEY || '';
     return token.length > 0 && !token.includes('YOUR_') && !token.includes('your-');
   } catch {
     return false;

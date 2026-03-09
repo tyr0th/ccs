@@ -366,6 +366,9 @@ const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as cons
 /** Check if settings have required fields (returns missing list for warnings) */
 function checkRequiredEnvVars(settings: Settings): string[] {
   const env = settings?.env || {};
+  if (env.ANTHROPIC_API_KEY?.trim() && !env.ANTHROPIC_BASE_URL?.trim()) {
+    return [];
+  }
   return REQUIRED_ENV_KEYS.filter((key) => !env[key]?.trim());
 }
 

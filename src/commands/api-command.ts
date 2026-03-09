@@ -292,9 +292,9 @@ async function handleCreate(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Step 2: Base URL (use preset if provided)
-  let baseUrl = parsedArgs.baseUrl || preset?.baseUrl;
-  if (!baseUrl) {
+  // Step 2: Base URL (use preset if provided; skip prompt for presets with empty baseUrl like anthropic)
+  let baseUrl = parsedArgs.baseUrl ?? preset?.baseUrl ?? '';
+  if (!baseUrl && !preset) {
     baseUrl = await InteractivePrompt.input(
       'API Base URL (e.g., https://api.example.com/v1 - without /chat/completions)',
       { validate: validateUrl }
@@ -328,8 +328,19 @@ async function handleCreate(args: string[]): Promise<void> {
     // Show preset info
     console.log(info(`Using preset: ${preset.name}`));
     console.log(dim(`  ${preset.description}`));
-    console.log(dim(`  Base URL: ${preset.baseUrl}`));
+    if (preset.baseUrl) {
+      console.log(dim(`  Base URL: ${preset.baseUrl}`));
+    } else {
+      console.log(dim(`  Auth: Native Anthropic API (x-api-key header)`));
+    }
     console.log('');
+  }
+
+  // Auto-detect Anthropic direct API when user enters api.anthropic.com URL without preset
+  if (baseUrl && baseUrl.includes('api.anthropic.com') && !preset) {
+    console.log('');
+    console.log(info('Anthropic Direct API detected. Base URL will be omitted for native auth.'));
+    baseUrl = '';
   }
 
   // OpenRouter detection: offer interactive model picker
@@ -456,7 +467,7 @@ async function handleCreate(args: string[]): Promise<void> {
   console.log('');
   console.log(info('Creating API profile...'));
 
-  const result = createApiProfile(name, baseUrl, apiKey, models, resolvedTarget);
+  const result = createApiProfile(name, baseUrl || '', apiKey, models, resolvedTarget);
 
   if (!result.success) {
     console.log(fail(`Failed to create API profile: ${result.error}`));
@@ -946,6 +957,7 @@ async function showHelp(): Promise<void> {
   console.log(`  ${color('ccs api create', 'command')}`);
   console.log('');
   console.log(`  ${dim('# Quick setup with preset')}`);
+  console.log(`  ${color('ccs api create --preset anthropic', 'command')}`);
   console.log(`  ${color('ccs api create --preset openrouter', 'command')}`);
   console.log(`  ${color('ccs api create --preset alibaba-coding-plan', 'command')}`);
   console.log(`  ${color('ccs api create --preset alibaba', 'command')} ${dim('# alias')}`);

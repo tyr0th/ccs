@@ -32,6 +32,11 @@ function isOpenRouterUrl(baseUrl: string): boolean {
   return baseUrl.toLowerCase().includes('openrouter.ai');
 }
 
+/** Detect Anthropic direct API profile (native auth, no proxy) */
+function isAnthropicDirect(baseUrl: string, apiKey: string): boolean {
+  return apiKey.startsWith('sk-ant-') || baseUrl.includes('api.anthropic.com');
+}
+
 function resolveProviderFromBaseUrl(baseUrl: string): CLIProxyProvider | null {
   if (baseUrl.trim().length === 0) {
     return null;
@@ -76,20 +81,27 @@ function createSettingsFile(
     model: models.default,
   });
 
+  const isNative = isAnthropicDirect(baseUrl, apiKey);
   const settings = {
     env: {
-      ANTHROPIC_BASE_URL: baseUrl,
-      ANTHROPIC_AUTH_TOKEN: apiKey,
+      // Native mode: ANTHROPIC_API_KEY only, no BASE_URL/AUTH_TOKEN
+      // Proxy mode: ANTHROPIC_BASE_URL + AUTH_TOKEN (existing behavior)
+      ...(isNative
+        ? { ANTHROPIC_API_KEY: apiKey }
+        : {
+            ANTHROPIC_BASE_URL: baseUrl,
+            ANTHROPIC_AUTH_TOKEN: apiKey,
+            ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
+          }),
       ANTHROPIC_MODEL: models.default,
       ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
       ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
       CCS_DROID_PROVIDER: droidProvider,
-      // OpenRouter requires explicitly blanking the API key to prevent conflicts
-      ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
     },
   };
 
+  fs.mkdirSync(ccsDir, { recursive: true });
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 
   // Inject WebSearch hooks into profile settings
@@ -151,17 +163,21 @@ function createApiProfileUnified(
     model: models.default,
   });
 
+  const isNative = isAnthropicDirect(baseUrl, apiKey);
   const settings = {
     env: {
-      ANTHROPIC_BASE_URL: baseUrl,
-      ANTHROPIC_AUTH_TOKEN: apiKey,
+      ...(isNative
+        ? { ANTHROPIC_API_KEY: apiKey }
+        : {
+            ANTHROPIC_BASE_URL: baseUrl,
+            ANTHROPIC_AUTH_TOKEN: apiKey,
+            ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
+          }),
       ANTHROPIC_MODEL: models.default,
       ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
       ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
       CCS_DROID_PROVIDER: droidProvider,
-      // OpenRouter requires explicitly blanking the API key to prevent conflicts
-      ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
     },
   };
 
