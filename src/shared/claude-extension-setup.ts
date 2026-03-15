@@ -45,14 +45,24 @@ export const CLAUDE_EXTENSION_MANAGED_ENV_KEYS = [
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_MODEL',
+  'ANTHROPIC_MAX_TOKENS',
+  'ANTHROPIC_SAFE_MODE',
+  'ANTHROPIC_TEMPERATURE',
   'ANTHROPIC_SMALL_FAST_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
   'ANTHROPIC_DEFAULT_SONNET_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'API_TIMEOUT_MS',
   'CLAUDE_CONFIG_DIR',
   'DISABLE_NON_ESSENTIAL_MODEL_CALLS',
   'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+  'ENABLE_STREAMING',
+  'MAX_THINKING_TOKENS',
 ] as const;
+
+function sortUniqueEnvKeys(keys: Iterable<string>): string[] {
+  return [...new Set(keys)].sort((left, right) => left.localeCompare(right));
+}
 
 function sortEnvRecord(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   const normalized: Record<string, string> = {};
@@ -250,17 +260,20 @@ export async function resolveClaudeExtensionSetup(
     profileLabel: requestedProfile === 'default' ? 'default' : result.name,
     profileDescription: describeProfile(requestedProfile, result),
     extensionEnv: resolved.extensionEnv,
-    removeEnvKeys: [...CLAUDE_EXTENSION_MANAGED_ENV_KEYS],
+    removeEnvKeys: sortUniqueEnvKeys([
+      ...CLAUDE_EXTENSION_MANAGED_ENV_KEYS,
+      ...Object.keys(resolved.extensionEnv),
+    ]),
     warnings: resolved.warnings,
     notes: resolved.notes,
     disableLoginPrompt: resolved.disableLoginPrompt,
   };
 }
 
-export function renderClaudeExtensionSettingsJson(
+export function buildClaudeExtensionSettingsObject(
   setup: ClaudeExtensionSetup,
   host: ClaudeExtensionHost
-): string {
+): Record<string, unknown> {
   const definition = getClaudeExtensionHostDefinition(host);
   const payload: Record<string, unknown> = {
     [definition.settingsKey]: Object.entries(setup.extensionEnv).map(([name, value]) => ({
@@ -271,11 +284,24 @@ export function renderClaudeExtensionSettingsJson(
   if (definition.disableLoginPromptKey && setup.disableLoginPrompt) {
     payload[definition.disableLoginPromptKey] = true;
   }
-  return JSON.stringify(payload, null, 2);
+  return payload;
+}
+
+export function buildSharedClaudeSettingsObject(
+  setup: ClaudeExtensionSetup
+): Record<string, Record<string, string>> {
+  return { env: setup.extensionEnv };
+}
+
+export function renderClaudeExtensionSettingsJson(
+  setup: ClaudeExtensionSetup,
+  host: ClaudeExtensionHost
+): string {
+  return JSON.stringify(buildClaudeExtensionSettingsObject(setup, host), null, 2);
 }
 
 export function renderSharedClaudeSettingsJson(setup: ClaudeExtensionSetup): string {
-  return JSON.stringify({ env: setup.extensionEnv }, null, 2);
+  return JSON.stringify(buildSharedClaudeSettingsObject(setup), null, 2);
 }
 
 export function getClaudeExtensionHostMetadata(

@@ -11,9 +11,25 @@ import {
   renderSharedClaudeSettingsJson,
   resolveClaudeExtensionSetup,
 } from '../../shared/claude-extension-setup';
+import {
+  createClaudeExtensionBinding,
+  deleteClaudeExtensionBinding,
+  getClaudeExtensionBinding,
+  listClaudeExtensionBindings,
+  updateClaudeExtensionBinding,
+} from '../services/claude-extension-binding-service';
+import {
+  applyClaudeExtensionBinding,
+  getDefaultClaudeExtensionIdeSettingsPath,
+  resetClaudeExtensionBinding,
+  resolveClaudeExtensionIdeSettingsPath,
+  type ClaudeExtensionActionTarget,
+  verifyClaudeExtensionBinding,
+} from '../services/claude-extension-settings-service';
 
 const router = Router();
 const VALID_HOSTS = new Set(CLAUDE_EXTENSION_HOSTS.map((host) => host.id));
+const VALID_TARGETS = new Set<ClaudeExtensionActionTarget>(['shared', 'ide', 'all']);
 
 function getHostFromRequest(req: Request): ClaudeExtensionHost {
   const rawHost = String(req.query.host || 'vscode');
@@ -25,10 +41,40 @@ function getHostFromRequest(req: Request): ClaudeExtensionHost {
   return rawHost as ClaudeExtensionHost;
 }
 
+function getActionTarget(req: Request): ClaudeExtensionActionTarget {
+  const rawTarget =
+    req.body && typeof req.body.target === 'string' ? req.body.target.trim().toLowerCase() : 'all';
+  if (!VALID_TARGETS.has(rawTarget as ClaudeExtensionActionTarget)) {
+    throw new Error('Invalid target. Use: shared, ide, or all');
+  }
+  return rawTarget as ClaudeExtensionActionTarget;
+}
+
+function serializeBinding(id: string) {
+  const binding = getClaudeExtensionBinding(id);
+  return {
+    ...binding,
+    effectiveIdeSettingsPath: resolveClaudeExtensionIdeSettingsPath(binding),
+    usesDefaultIdeSettingsPath: !binding.ideSettingsPath,
+  };
+}
+
+function handleRouteError(res: Response, error: unknown): void {
+  const message = (error as Error).message;
+  if (message.startsWith('Binding not found')) {
+    res.status(404).json({ error: message });
+    return;
+  }
+  res.status(400).json({ error: message });
+}
+
 router.get('/profiles', (_req: Request, res: Response): void => {
   res.json({
     profiles: listClaudeExtensionProfiles(),
-    hosts: CLAUDE_EXTENSION_HOSTS,
+    hosts: CLAUDE_EXTENSION_HOSTS.map((host) => ({
+      ...host,
+      defaultSettingsPath: getDefaultClaudeExtensionIdeSettingsPath(host.id),
+    })),
   });
 });
 
@@ -63,12 +109,84 @@ router.get('/setup', async (req: Request, res: Response): Promise<void> => {
         json: renderSharedClaudeSettingsJson(setup),
       },
       ideSettings: {
+        path: getDefaultClaudeExtensionIdeSettingsPath(host),
         targetLabel: hostDefinition.settingsTargetLabel,
         json: renderClaudeExtensionSettingsJson(setup, host),
       },
     });
   } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+    handleRouteError(res, error);
+  }
+});
+
+router.get('/bindings', (_req: Request, res: Response): void => {
+  try {
+    res.json({
+      bindings: listClaudeExtensionBindings().map((binding) => ({
+        ...binding,
+        effectiveIdeSettingsPath: resolveClaudeExtensionIdeSettingsPath(binding),
+        usesDefaultIdeSettingsPath: !binding.ideSettingsPath,
+      })),
+    });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+router.post('/bindings', (req: Request, res: Response): void => {
+  try {
+    const binding = createClaudeExtensionBinding(req.body);
+    res.status(201).json({ binding: serializeBinding(binding.id) });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+router.put('/bindings/:id', (req: Request, res: Response): void => {
+  try {
+    const binding = updateClaudeExtensionBinding(req.params.id, req.body);
+    res.json({ binding: serializeBinding(binding.id) });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+router.delete('/bindings/:id', (req: Request, res: Response): void => {
+  try {
+    deleteClaudeExtensionBinding(req.params.id);
+    res.status(204).end();
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+router.get('/bindings/:id/verify', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const binding = getClaudeExtensionBinding(req.params.id);
+    const status = await verifyClaudeExtensionBinding(binding);
+    res.json({ binding: serializeBinding(binding.id), ...status });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+router.post('/bindings/:id/apply', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const binding = getClaudeExtensionBinding(req.params.id);
+    const status = await applyClaudeExtensionBinding(binding, getActionTarget(req));
+    res.json({ binding: serializeBinding(binding.id), ...status });
+  } catch (error) {
+    handleRouteError(res, error);
+  }
+});
+
+router.post('/bindings/:id/reset', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const binding = getClaudeExtensionBinding(req.params.id);
+    const status = await resetClaudeExtensionBinding(binding, getActionTarget(req));
+    res.json({ binding: serializeBinding(binding.id), ...status });
+  } catch (error) {
+    handleRouteError(res, error);
   }
 });
 
