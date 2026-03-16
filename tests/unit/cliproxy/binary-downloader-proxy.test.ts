@@ -68,6 +68,12 @@ describe('Binary Downloader Proxy Support', () => {
         process.env.ALL_PROXY = 'http://allproxy:8080';
         expect(getProxyUrl(true)).toBe('http://allproxy:8080');
       });
+
+      it('should skip invalid HTTP_PROXY and fall back to ALL_PROXY', () => {
+        process.env.HTTP_PROXY = 'not-a-valid-url';
+        process.env.ALL_PROXY = 'http://allproxy:8080';
+        expect(getProxyUrl(true)).toBe('http://allproxy:8080');
+      });
     });
 
     describe('HTTP requests', () => {
@@ -88,6 +94,12 @@ describe('Binary Downloader Proxy Support', () => {
 
       it('should fall back to all_proxy for HTTP', () => {
         process.env.all_proxy = 'http://allproxy:8080';
+        expect(getProxyUrl(false)).toBe('http://allproxy:8080');
+      });
+
+      it('should skip invalid HTTP_PROXY and use ALL_PROXY for HTTP', () => {
+        process.env.HTTP_PROXY = 'not-a-valid-url';
+        process.env.ALL_PROXY = 'http://allproxy:8080';
         expect(getProxyUrl(false)).toBe('http://allproxy:8080');
       });
 
@@ -248,6 +260,11 @@ describe('Binary Downloader Proxy Support', () => {
     describe('error handling', () => {
       it('should return false for invalid proxy URL', () => {
         process.env.https_proxy = 'not-a-valid-url';
+        expect(getProxyAgent('https://example.com')).toBe(false);
+      });
+
+      it('should reject unsupported proxy protocols', () => {
+        process.env.https_proxy = 'socks5://proxy:1080';
         expect(getProxyAgent('https://example.com')).toBe(false);
       });
 
