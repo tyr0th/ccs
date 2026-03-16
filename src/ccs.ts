@@ -1,3 +1,5 @@
+import './utils/fetch-proxy-setup';
+
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';

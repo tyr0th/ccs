@@ -573,6 +573,26 @@ See [Remote Proxy documentation](https://docs.ccs.kaitran.ca/features/remote-pro
 
 <br>
 
+## Standard Fetch Proxy
+
+CCS also respects standard proxy environment variables for fetch-based quota, dashboard,
+and provider management requests:
+
+```bash
+export HTTPS_PROXY=http://proxy.example.com:8080
+export HTTP_PROXY=http://proxy.example.com:8080
+export ALL_PROXY=http://proxy.example.com:8080
+export NO_PROXY=localhost,127.0.0.1,.internal.corp
+```
+
+Notes:
+- CCS automatically bypasses loopback addresses (`localhost`, `127.0.0.1`, `::1`) for its own local services.
+- If `HTTPS_PROXY` is unset, CCS falls back to `HTTP_PROXY` for HTTPS fetches.
+- `ALL_PROXY` is used when protocol-specific proxy variables are not configured.
+- Proxy URLs must use `http://` or `https://`.
+
+<br>
+
 ## Documentation
 
 | Topic | Link |
