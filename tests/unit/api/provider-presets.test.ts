@@ -35,6 +35,7 @@ describe('provider-presets', () => {
     expect(preset?.requiresApiKey).toBe(false);
     expect(preset?.apiKeyPlaceholder).toBe('llamacpp');
     expect(preset?.baseUrl).toBe('http://127.0.0.1:8080');
+    expect(preset?.icon).toBe('/assets/providers/llama-cpp.svg');
   });
 
   it('resolves legacy kimi preset alias to km', () => {

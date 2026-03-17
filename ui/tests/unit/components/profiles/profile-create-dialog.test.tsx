@@ -23,7 +23,7 @@ describe('ProfileCreateDialog', () => {
     mutateAsync.mockReset();
   });
 
-  it('reveals more presets from custom mode and keeps custom unselected after choosing a template', async () => {
+  it('keeps advanced presets collapsed until explicitly opened and deselects custom after choosing a template', async () => {
     render(
       <ProfileCreateDialog
         open
@@ -34,13 +34,20 @@ describe('ProfileCreateDialog', () => {
     );
 
     expect(screen.getByText('Featured Providers')).toBeInTheDocument();
-    expect(screen.queryByText('More Presets')).not.toBeInTheDocument();
+    expect(screen.getByText('Alibaba Coding Plan')).toBeVisible();
+    const morePresetsToggle = screen.getByRole('button', { name: /More Presets/i });
+    expect(morePresetsToggle).toHaveAttribute('aria-expanded', 'false');
     expect(document.body.querySelectorAll('.overflow-x-auto')).toHaveLength(1);
 
     const customButton = screen.getByRole('button', { name: /Custom Endpoint/i });
     await userEvent.click(customButton);
 
-    expect(await screen.findByText('More Presets')).toBeInTheDocument();
+    expect(morePresetsToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(document.body.querySelectorAll('.overflow-x-auto')).toHaveLength(1);
+
+    await userEvent.click(morePresetsToggle);
+
+    expect(morePresetsToggle).toHaveAttribute('aria-expanded', 'true');
     expect(document.body.querySelectorAll('.overflow-x-auto')).toHaveLength(2);
 
     const glmButton = screen.getByText('GLM').closest('button');
@@ -50,6 +57,7 @@ describe('ProfileCreateDialog', () => {
     }
     await userEvent.click(glmButton);
 
+    expect(morePresetsToggle).toHaveAttribute('aria-expanded', 'true');
     await waitFor(() => {
       expect(customButton).not.toHaveClass('border-primary');
     });

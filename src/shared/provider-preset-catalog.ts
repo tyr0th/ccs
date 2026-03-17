@@ -118,6 +118,7 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     requiresApiKey: false,
     badge: 'Local',
     featured: true,
+    icon: '/assets/providers/llama-cpp.svg',
   },
   {
     id: 'anthropic',
