@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **#744**: API profile creation now keeps featured providers in a horizontal rail with scroll fallback, moves Anthropic Direct API to the end, reuses the shared Claude logo, and separates the custom-endpoint entry point from advanced template discovery.
 - **#724**: Codex startup is now free-plan safe. CCS defaults new Codex sessions to a cross-plan model and auto-repairs stale paid-only Codex defaults when the active account is on the free plan.
 - **#737**: Dashboard model pickers in Cursor, Copilot, and CLIProxy now use a searchable combobox with autofocus and explicit no-results states for large model catalogs.
 - **#736**: `ccs config` now supports explicit dashboard bind hosts via `--host`, and surfaces remote-access warnings plus reachable URLs when the effective bind is non-loopback.
