@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { ProviderLogo } from '@/components/cliproxy/provider-logo';
 import { useCreateProfile } from '@/hooks/use-profiles';
 import { useOpenRouterCatalog } from '@/hooks/use-openrouter-models';
 import { Loader2, Plus, AlertTriangle, Info, Eye, EyeOff, Settings2, Sparkles } from 'lucide-react';
@@ -105,6 +106,12 @@ const QUICK_TEMPLATE_PRESETS = PROVIDER_PRESETS.filter(
 const QUICK_TEMPLATE_PRESET_IDS = new Set<string>(
   QUICK_TEMPLATE_PRESETS.map((preset) => preset.id)
 );
+const CARD_META_CLAMP_STYLE = {
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+} as const;
 
 export function ProfileCreateDialog({
   open,
@@ -277,6 +284,7 @@ export function ProfileCreateDialog({
   const isQuickTemplateSelected =
     selectedPreset !== CUSTOM_PRESET_ID && QUICK_TEMPLATE_PRESET_IDS.has(selectedPreset);
   const isOpenRouter = currentPreset?.id === DEFAULT_PRESET_ID;
+  const showQuickTemplates = selectedPreset === CUSTOM_PRESET_ID || isQuickTemplateSelected;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -295,57 +303,70 @@ export function ProfileCreateDialog({
           onSubmit={handleSubmit(onSubmit)}
           className="flex flex-col flex-1 min-h-0 overflow-hidden"
         >
-          {/* Provider Preset Cards - Compact horizontal layout */}
-          <div className="px-6 py-3 border-b bg-muted/30 space-y-2">
-            {/* Main Options: OpenRouter + Custom */}
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">
-                {t('profileEditor.provider')}
-              </Label>
-              <div className="flex gap-2">
-                {RECOMMENDED_PRESETS.map((preset) => (
-                  <CompactPresetCard
-                    key={preset.id}
-                    preset={preset}
-                    isSelected={selectedPreset === preset.id}
-                    onClick={() => handlePresetSelect(preset.id)}
-                  />
-                ))}
-                {/* Custom option */}
-                <button
-                  type="button"
-                  onClick={() => handlePresetSelect(CUSTOM_PRESET_ID)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-md border-2 transition-all text-sm font-medium',
-                    selectedPreset === CUSTOM_PRESET_ID || isQuickTemplateSelected
-                      ? 'border-primary bg-primary/10 text-primary dark:bg-primary/20'
-                      : 'border-dashed border-muted-foreground/40 hover:border-primary/50 hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <Settings2 className="w-4 h-4" />
-                  <span>{t('profileEditor.custom')}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Show quick templates when custom mode or non-recommended preset is selected */}
-            {(selectedPreset === CUSTOM_PRESET_ID || isQuickTemplateSelected) && (
-              <div className="pt-3 mt-2 border-t border-dashed border-muted-foreground/30">
-                <Label className="text-xs font-medium text-foreground/70 mb-2 block">
-                  Quick Templates
+          <div className="border-b bg-muted/20 px-6 py-4">
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  {t('profileEditor.provider')}
                 </Label>
-                <div className="flex gap-2 flex-wrap">
-                  {QUICK_TEMPLATE_PRESETS.map((preset) => (
-                    <CompactPresetCard
-                      key={preset.id}
-                      preset={preset}
-                      isSelected={selectedPreset === preset.id}
-                      onClick={() => handlePresetSelect(preset.id)}
-                    />
-                  ))}
+                <p className="text-xs text-muted-foreground">
+                  {t('profileEditor.providerChooserHint')}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/70">
+                    {t('profileEditor.featuredProviders')}
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    {t('profileEditor.scrollHint')}
+                  </span>
+                </div>
+                <div className="-mx-1 overflow-x-auto pb-1">
+                  <div className="flex min-w-max gap-2 px-1">
+                    {RECOMMENDED_PRESETS.map((preset) => (
+                      <CompactPresetCard
+                        key={preset.id}
+                        preset={preset}
+                        isSelected={selectedPreset === preset.id}
+                        onClick={() => handlePresetSelect(preset.id)}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
-            )}
+
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/70">
+                  {t('profileEditor.customEndpoint')}
+                </Label>
+                <CustomPresetCard
+                  isSelected={selectedPreset === CUSTOM_PRESET_ID}
+                  onClick={() => handlePresetSelect(CUSTOM_PRESET_ID)}
+                />
+              </div>
+
+              {showQuickTemplates && (
+                <div className="space-y-2 border-t border-dashed border-muted-foreground/25 pt-4">
+                  <Label className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/70">
+                    {t('profileEditor.morePresets')}
+                  </Label>
+                  <div className="-mx-1 overflow-x-auto pb-1">
+                    <div className="flex min-w-max gap-2 px-1">
+                      {QUICK_TEMPLATE_PRESETS.map((preset) => (
+                        <CompactPresetCard
+                          key={preset.id}
+                          preset={preset}
+                          isSelected={selectedPreset === preset.id}
+                          onClick={() => handlePresetSelect(preset.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <Tabs
@@ -655,35 +676,78 @@ function CompactPresetCard({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const isAnthropicDirect = preset.id === 'anthropic';
+
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 px-3 py-2 rounded-md border transition-all text-sm',
+        'flex min-h-[104px] w-[180px] flex-none flex-col items-start gap-3 rounded-xl border px-3 py-3 text-left transition-all',
         isSelected
-          ? preset.featured
-            ? 'border-accent bg-accent/10 dark:bg-accent/20 font-medium'
-            : 'border-primary bg-primary/10 dark:bg-primary/20 font-medium'
-          : 'border-muted-foreground/20 hover:border-muted-foreground/40 hover:bg-muted/50'
+          ? 'border-primary bg-primary/8 shadow-sm ring-1 ring-primary/10'
+          : 'border-border/60 bg-background hover:border-primary/40 hover:bg-accent/20'
       )}
     >
-      {preset.icon ? (
-        <img src={preset.icon} alt="" className="w-4 h-4" />
-      ) : (
-        <div className="w-4 h-4 rounded-full bg-muted-foreground/20 flex items-center justify-center text-[9px] font-bold text-foreground/70">
-          {preset.name.charAt(0)}
-        </div>
+      <div className="flex w-full items-start justify-between gap-3">
+        {isAnthropicDirect ? (
+          <ProviderLogo
+            provider="claude"
+            size="md"
+            className="rounded-lg border border-border/60 bg-background"
+          />
+        ) : preset.icon ? (
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-background">
+            <img src={preset.icon} alt="" className="h-5 w-5 object-contain" />
+          </div>
+        ) : (
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-muted/70 text-xs font-semibold text-foreground/70">
+            {preset.name.charAt(0)}
+          </div>
+        )}
+        {preset.badge && (
+          <Badge
+            variant="secondary"
+            className="shrink-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+          >
+            {preset.badge}
+          </Badge>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-sm font-semibold leading-tight">{preset.name}</div>
+        <p className="text-xs leading-4 text-muted-foreground" style={CARD_META_CLAMP_STYLE}>
+          {preset.description}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function CustomPresetCard({ isSelected, onClick }: { isSelected: boolean; onClick: () => void }) {
+  const { t } = useTranslation();
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-xl border border-dashed px-4 py-3 text-left transition-all sm:max-w-[280px]',
+        isSelected
+          ? 'border-primary bg-primary/8 shadow-sm ring-1 ring-primary/10'
+          : 'border-muted-foreground/30 bg-background hover:border-primary/40 hover:bg-accent/20'
       )}
-      <span className="font-medium">{preset.name}</span>
-      {preset.badge && (
-        <Badge
-          variant="secondary"
-          className="text-[10px] px-1.5 py-0 ml-0.5 bg-muted-foreground/10 text-muted-foreground"
-        >
-          {preset.badge}
-        </Badge>
-      )}
+    >
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-current/30 bg-muted/70">
+        <Settings2 className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <div className="space-y-1">
+        <div className="text-sm font-semibold">{t('profileEditor.customEndpoint')}</div>
+        <p className="text-xs text-muted-foreground">
+          {t('profileEditor.customEndpointDescription')}
+        </p>
+      </div>
     </button>
   );
 }

@@ -61,6 +61,15 @@ describe('provider-presets', () => {
     expect(preset?.defaultProfileName).toBe('qwen-api');
   });
 
+  it('keeps Anthropic direct last in the recommended preset order and reuses the Claude logo', () => {
+    const recommendedPresetIds = PROVIDER_PRESETS.filter(
+      (preset) => preset.category === 'recommended'
+    ).map((preset) => preset.id);
+
+    expect(recommendedPresetIds.at(-1)).toBe('anthropic');
+    expect(getPresetById('anthropic')?.icon).toBe('/assets/providers/claude.svg');
+  });
+
   it('only references provider preset icons that exist in ui/public', () => {
     for (const preset of PROVIDER_PRESETS) {
       if (!preset.icon) continue;

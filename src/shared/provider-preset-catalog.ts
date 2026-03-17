@@ -8,11 +8,11 @@
 export type PresetCategory = 'recommended' | 'alternative';
 
 export const PROVIDER_PRESET_IDS = [
-  'anthropic',
   'openrouter',
   'alibaba-coding-plan',
   'ollama',
   'llamacpp',
+  'anthropic',
   'glm',
   'glmt',
   'km',
@@ -60,20 +60,6 @@ export const PROVIDER_PRESET_ALIASES: Readonly<Record<string, ProviderPresetId>>
 });
 
 const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic (Direct API)',
-    description: 'Use your own Anthropic API key (sk-ant-...)',
-    baseUrl: '',
-    defaultProfileName: 'anthropic',
-    defaultModel: 'claude-sonnet-4-5-20250929',
-    apiKeyPlaceholder: 'sk-ant-api03-...',
-    apiKeyHint: 'Get key at console.anthropic.com/settings/keys',
-    category: 'recommended',
-    requiresApiKey: true,
-    badge: 'Direct',
-    featured: true,
-  },
   {
     id: 'openrouter',
     name: 'OpenRouter',
@@ -132,6 +118,21 @@ const RAW_PROVIDER_PRESET_DEFINITIONS: readonly ProviderPresetDefinition[] = [
     requiresApiKey: false,
     badge: 'Local',
     featured: true,
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic (Direct API)',
+    description: 'Use your own Anthropic API key (sk-ant-...)',
+    baseUrl: '',
+    defaultProfileName: 'anthropic',
+    defaultModel: 'claude-sonnet-4-5-20250929',
+    apiKeyPlaceholder: 'sk-ant-api03-...',
+    apiKeyHint: 'Get key at console.anthropic.com/settings/keys',
+    category: 'recommended',
+    requiresApiKey: true,
+    badge: 'Direct',
+    featured: true,
+    icon: '/assets/providers/claude.svg',
   },
   {
     id: 'glm',

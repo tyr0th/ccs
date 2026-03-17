@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getPresetById, resolvePresetApiKeyValue } from '@/lib/provider-presets';
+import {
+  getPresetById,
+  getPresetsByCategory,
+  resolvePresetApiKeyValue,
+} from '@/lib/provider-presets';
 
 describe('resolvePresetApiKeyValue', () => {
   it('keeps an explicit API key when one is provided', () => {
@@ -20,5 +24,16 @@ describe('resolvePresetApiKeyValue', () => {
   it('returns an empty string for API-key providers when input is empty', () => {
     const preset = getPresetById('openrouter');
     expect(resolvePresetApiKeyValue(preset, '')).toBe('');
+  });
+});
+
+describe('provider preset metadata', () => {
+  it('keeps Anthropic direct last in the recommended order', () => {
+    const recommendedPresetIds = getPresetsByCategory('recommended').map((preset) => preset.id);
+    expect(recommendedPresetIds.at(-1)).toBe('anthropic');
+  });
+
+  it('reuses the Claude provider logo asset for Anthropic direct', () => {
+    expect(getPresetById('anthropic')?.icon).toBe('/assets/providers/claude.svg');
   });
 });

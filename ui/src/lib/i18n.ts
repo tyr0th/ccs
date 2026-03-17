@@ -606,6 +606,14 @@ const resources = {
         setAsDefault: 'Set as default',
         provider: 'Provider',
         custom: 'Custom',
+        providerChooserHint:
+          'Start with a preset, then adjust the URL, API key, or model mapping as needed.',
+        featuredProviders: 'Featured Providers',
+        scrollHint: 'Scroll if your screen is narrow',
+        customEndpoint: 'Custom Endpoint',
+        morePresets: 'More Presets',
+        customEndpointDescription:
+          'Start from a blank Anthropic-compatible URL and configure everything manually.',
       },
       settings: {
         sectionLoadFailed: 'Failed to load section',
@@ -1753,6 +1761,12 @@ const resources = {
         setAsDefault: '设为默认',
         provider: '提供商',
         custom: '自定义',
+        providerChooserHint: '先选择一个预设，之后仍可调整 URL、API key 和模型映射。',
+        featuredProviders: '精选提供商',
+        scrollHint: '屏幕较窄时可横向滚动',
+        customEndpoint: '自定义端点',
+        morePresets: '更多预设',
+        customEndpointDescription: '从空白的 Anthropic 兼容 URL 开始，手动配置全部内容。',
       },
       settings: {
         sectionLoadFailed: '加载分区失败',
@@ -2924,6 +2938,14 @@ const resources = {
         setAsDefault: 'Đặt làm mặc định',
         provider: 'Nhà cung cấp',
         custom: 'Tùy chỉnh',
+        providerChooserHint:
+          'Bắt đầu với preset, sau đó bạn vẫn có thể chỉnh URL, API key và ánh xạ mô hình.',
+        featuredProviders: 'Nhà cung cấp nổi bật',
+        scrollHint: 'Có thể cuộn ngang trên màn hình hẹp',
+        customEndpoint: 'Endpoint tùy chỉnh',
+        morePresets: 'Thêm preset',
+        customEndpointDescription:
+          'Bắt đầu với URL tương thích Anthropic trống và tự cấu hình mọi thứ.',
       },
       settings: {
         sectionLoadFailed: 'Không tải được phần',
@@ -4117,6 +4139,13 @@ const resources = {
         setAsDefault: 'デフォルトに設定',
         provider: 'プロバイダー',
         custom: 'カスタム',
+        providerChooserHint:
+          'まずプリセットを選び、その後で URL、API Key、モデルマッピングを調整できます。',
+        featuredProviders: '注目のプロバイダー',
+        scrollHint: '画面が狭い場合は横にスクロールできます',
+        customEndpoint: 'カスタムエンドポイント',
+        morePresets: 'その他のプリセット',
+        customEndpointDescription: '空の Anthropic 互換 URL から始め、すべて手動で設定します。',
       },
       settings: {
         sectionLoadFailed: 'セクションの読み込みに失敗しました',
