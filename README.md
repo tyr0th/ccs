@@ -50,8 +50,22 @@ bun add -g @kaitranntt/ccs         # bun (30x faster)
 
 ```bash
 ccs config
-# Opens http://localhost:3000
+# Opens a local browser URL
 ```
+
+CCS uses the runtime's system-default bind. If that bind is reachable beyond loopback,
+the CLI also prints bind/network details plus an auth reminder.
+
+Force all-interface binding for remote devices:
+
+```bash
+ccs config --host 0.0.0.0
+# Terminal prints the reachable URLs to open from the other device
+```
+
+If you expose the dashboard beyond localhost, protect it first with `ccs config auth setup`.
+
+Use `ccs config --host 127.0.0.1` to force local-only binding.
 
 Dashboard updates hub: `http://localhost:3000/updates`
 

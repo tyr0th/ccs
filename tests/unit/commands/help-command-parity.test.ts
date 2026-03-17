@@ -58,4 +58,17 @@ describe('help command parity', () => {
       true
     );
   });
+
+  test('root help documents dashboard host binding example', async () => {
+    const lines: string[] = [];
+    console.log = (...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    await handleHelpCommand();
+
+    const rendered = stripAnsi(lines.join('\n'));
+    expect(rendered.includes('ccs config --host 0.0.0.0')).toBe(true);
+    expect(rendered.includes('Force all-interface binding for remote devices')).toBe(true);
+  });
 });

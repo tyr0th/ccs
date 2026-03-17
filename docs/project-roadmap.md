@@ -43,6 +43,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 - **#724**: Codex startup is now free-plan safe. CCS defaults new Codex sessions to a cross-plan model and auto-repairs stale paid-only Codex defaults when the active account is on the free plan.
 - **#737**: Dashboard model pickers in Cursor, Copilot, and CLIProxy now use a searchable combobox with autofocus and explicit no-results states for large model catalogs.
+- **#736**: `ccs config` now supports explicit dashboard bind hosts via `--host`, and surfaces remote-access warnings plus reachable URLs when the effective bind is non-loopback.
 
 ### Maintainability Hardening Kickoff
 

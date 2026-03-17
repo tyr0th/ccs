@@ -458,3 +458,4 @@ router.delete('/:name', (req: Request, res: Response): void => {
 });
 
 export default router;
+export { parseTarget } from './route-helpers';

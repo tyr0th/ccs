@@ -18,7 +18,20 @@ From project root:
 bun run dev
 ```
 
-This starts the CCS server and serves the dashboard at `http://localhost:3000`.
+This starts the CCS server, opens a local browser URL, and prints bind/network details for the dashboard.
+If the runtime bind is reachable beyond loopback, CCS also prints an auth reminder.
+
+For remote device access during development, run:
+
+```bash
+bun run dev -- --host 0.0.0.0
+```
+
+For local-only development, run:
+
+```bash
+bun run dev -- --host 127.0.0.1
+```
 
 From `ui/` only (frontend dev server):
 

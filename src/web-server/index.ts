@@ -17,6 +17,7 @@ import { shutdownUsageAggregator } from './usage/aggregator';
 
 export interface ServerOptions {
   port: number;
+  host?: string;
   staticDir?: string;
   dev?: boolean;
 }
@@ -112,11 +113,56 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   };
 
   // Start listening
-  return new Promise<ServerInstance>((resolve) => {
-    server.listen(options.port, () => {
+  return new Promise<ServerInstance>((resolve, reject) => {
+    const onError = (error: NodeJS.ErrnoException) => {
+      cleanup();
+      reject(new Error(formatListenError(error, options)));
+    };
+
+    server.once('error', onError);
+
+    const onListening = () => {
+      server.off('error', onError);
       // Usage cache loads on-demand when Analytics page is visited
       // This keeps server startup instant for users who don't need analytics
       resolve({ server, wss, cleanup });
-    });
+    };
+
+    try {
+      if (options.host) {
+        server.listen(options.port, options.host, onListening);
+        return;
+      }
+
+      server.listen(options.port, onListening);
+    } catch (error) {
+      server.off('error', onError);
+      cleanup();
+      reject(new Error(formatListenError(error as NodeJS.ErrnoException, options)));
+    }
   });
+}
+
+function formatListenError(error: NodeJS.ErrnoException, options: ServerOptions): string {
+  if (error.code === 'EADDRINUSE' && options.host) {
+    return `Unable to bind ${options.host}:${options.port}; the address may be unavailable or the port may already be in use`;
+  }
+
+  if (error.code === 'EADDRINUSE') {
+    return `Port ${options.port} is already in use`;
+  }
+
+  if (error.code === 'EADDRNOTAVAIL' && options.host) {
+    return `Cannot bind to ${options.host}:${options.port} on this machine`;
+  }
+
+  if (error.code === 'EACCES') {
+    return `Permission denied while binding to port ${options.port}`;
+  }
+
+  if (options.host) {
+    return `Cannot bind to ${options.host}:${options.port}: ${error.message}`;
+  }
+
+  return error.message;
 }
