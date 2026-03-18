@@ -1,4 +1,5 @@
 import { getDefaultAccount } from './account-manager';
+import { getProviderCatalog } from './model-catalog';
 import { fetchCodexQuota } from './quota-fetcher-codex';
 import { getCachedQuota, setCachedQuota } from './quota-response-cache';
 import type { CodexQuotaResult } from './quota-types';
@@ -12,6 +13,9 @@ const FREE_SAFE_FAST_MODEL = 'gpt-5-codex-mini';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 const CODEX_PAREN_SUFFIX_REGEX = /\((xhigh|high|medium)\)$/i;
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
+const KNOWN_CODEX_MODELS = new Set(
+  (getProviderCatalog('codex')?.models ?? []).map((model) => model.id.toLowerCase())
+);
 
 const FREE_PLAN_FALLBACKS = new Map<string, string>([
   ['gpt-5.3-codex', FREE_SAFE_DEFAULT_MODEL],
@@ -19,7 +23,29 @@ const FREE_PLAN_FALLBACKS = new Map<string, string>([
   ['gpt-5.4', FREE_SAFE_DEFAULT_MODEL],
 ]);
 
-function normalizeCodexModelId(model: string): string {
+export interface CodexRuntimeFallbackModelMap {
+  defaultModel?: string;
+  opusModel?: string;
+  sonnetModel?: string;
+  haikuModel?: string;
+}
+
+export interface CodexUnsupportedModelError {
+  message: string | null;
+  code: 'model_not_supported';
+  param: string | null;
+  type: string | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isKnownCodexModel(model: string): boolean {
+  return KNOWN_CODEX_MODELS.has(model);
+}
+
+export function normalizeCodexModelId(model: string): string {
   return model
     .trim()
     .replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '')
@@ -35,6 +61,74 @@ export function getDefaultCodexModel(): string {
 
 export function getFreePlanFallbackCodexModel(model: string): string | null {
   return FREE_PLAN_FALLBACKS.get(normalizeCodexModelId(model)) ?? null;
+}
+
+export function parseCodexUnsupportedModelError(
+  statusCode: number | undefined,
+  responseBody: string
+): CodexUnsupportedModelError | null {
+  if (statusCode !== 400 || !responseBody.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(responseBody);
+    if (
+      !isRecord(parsed) ||
+      !isRecord(parsed.error) ||
+      parsed.error.code !== 'model_not_supported'
+    ) {
+      return null;
+    }
+
+    return {
+      message: typeof parsed.error.message === 'string' ? parsed.error.message : null,
+      code: 'model_not_supported',
+      param: typeof parsed.error.param === 'string' ? parsed.error.param : null,
+      type: typeof parsed.error.type === 'string' ? parsed.error.type : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function resolveRuntimeCodexFallbackModel(options: {
+  requestedModel: string;
+  modelMap: CodexRuntimeFallbackModelMap;
+  excludeModels?: string[];
+}): string | null {
+  const requestedModel = normalizeCodexModelId(options.requestedModel);
+  if (!requestedModel) {
+    return null;
+  }
+
+  const excludedModels = new Set(
+    (options.excludeModels ?? []).map((model) => normalizeCodexModelId(model)).filter(Boolean)
+  );
+  const candidates = [
+    options.modelMap.defaultModel,
+    getFreePlanFallbackCodexModel(requestedModel),
+    options.modelMap.opusModel,
+    options.modelMap.sonnetModel,
+    options.modelMap.haikuModel,
+    getDefaultCodexModel(),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const normalizedCandidate = normalizeCodexModelId(candidate);
+    if (
+      !normalizedCandidate ||
+      normalizedCandidate === requestedModel ||
+      excludedModels.has(normalizedCandidate) ||
+      !isKnownCodexModel(normalizedCandidate)
+    ) {
+      continue;
+    }
+    return normalizedCandidate;
+  }
+
+  return null;
 }
 
 export async function reconcileCodexModelForActivePlan(options: {

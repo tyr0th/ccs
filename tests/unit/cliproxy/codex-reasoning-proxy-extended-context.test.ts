@@ -230,6 +230,90 @@ describe('CodexReasoningProxy extended-context compatibility', () => {
     expect(capturedBody?.model).toBe('enterprise-internal-high');
   });
 
+  it('retries unsupported live-session models once and remembers the fallback', async () => {
+    const capturedModels: string[] = [];
+    const capturedEfforts: Array<string | undefined> = [];
+
+    const upstream = http.createServer((req, res) => {
+      let rawBody = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        rawBody += chunk;
+      });
+      req.on('end', () => {
+        const requestBody = rawBody ? (JSON.parse(rawBody) as JsonRecord) : {};
+        const reasoning = requestBody.reasoning as JsonRecord | undefined;
+        const model = String(requestBody.model ?? '');
+        const effort = typeof reasoning?.effort === 'string' ? reasoning.effort : undefined;
+
+        capturedModels.push(model);
+        capturedEfforts.push(effort);
+
+        if (model === 'gpt-5.4') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: {
+                message: 'The requested model is not supported.',
+                code: 'model_not_supported',
+                param: 'model',
+                type: 'invalid_request_error',
+              },
+            })
+          );
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            model,
+            effort: effort ?? null,
+          })
+        );
+      });
+    });
+    cleanupServers.push(upstream);
+
+    const upstreamPort = await listenOnRandomPort(upstream);
+    const proxy = new CodexReasoningProxy({
+      upstreamBaseUrl: `http://127.0.0.1:${upstreamPort}`,
+      modelMap: {
+        defaultModel: 'gpt-5.4',
+        haikuModel: 'gpt-5-codex-mini',
+      },
+      defaultEffort: 'medium',
+    });
+
+    const proxyPort = await proxy.start();
+    const firstResponse = await postJson(
+      `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+      {
+        model: 'gpt-5.4-xhigh',
+        messages: [],
+      }
+    );
+    const secondResponse = await postJson(
+      `http://127.0.0.1:${proxyPort}/api/provider/codex/v1/messages`,
+      {
+        model: 'gpt-5.4-xhigh',
+        messages: [],
+      }
+    );
+
+    proxy.stop();
+
+    expect(firstResponse.statusCode).toBe(200);
+    expect(secondResponse.statusCode).toBe(200);
+    expect(firstResponse.body.model).toBe('gpt-5-codex');
+    expect(firstResponse.body.effort).toBe('high');
+    expect(secondResponse.body.model).toBe('gpt-5-codex');
+    expect(secondResponse.body.effort).toBe('high');
+    expect(capturedModels).toEqual(['gpt-5.4', 'gpt-5-codex', 'gpt-5-codex']);
+    expect(capturedEfforts).toEqual(['xhigh', 'high', 'high']);
+  });
+
   it('keeps reasoning enabled when CCS_THINKING=high overrides config off', async () => {
     let capturedBody: JsonRecord | null = null;
 

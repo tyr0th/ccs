@@ -1,6 +1,11 @@
 import * as http from 'http';
 import * as https from 'https';
 import { URL } from 'url';
+import {
+  normalizeCodexModelId,
+  parseCodexUnsupportedModelError,
+  resolveRuntimeCodexFallbackModel,
+} from './codex-plan-compatibility';
 import { getModelMaxLevel } from './model-catalog';
 
 export type CodexReasoningEffort = 'medium' | 'high' | 'xhigh';
@@ -27,6 +32,14 @@ export interface CodexReasoningProxyConfig {
   stripPathPrefix?: string;
   /** When true, skip reasoning effort injection entirely (thinking mode: off) */
   disableEffort?: boolean;
+}
+
+interface ForwardJsonContext {
+  requestPath: string;
+  requestedModel: string | null;
+  attemptedUpstreamModel: string | null;
+  effort: CodexReasoningEffort | null;
+  retryCount: number;
 }
 
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
@@ -170,6 +183,7 @@ export class CodexReasoningProxy {
   > &
     Pick<CodexReasoningProxyConfig, 'modelMap' | 'stripPathPrefix'>;
   private readonly modelEffort: Map<string, CodexReasoningEffort>;
+  private readonly sessionFallbackByModel = new Map<string, string>();
   private readonly recent: Array<{
     at: string;
     model: string | null;
@@ -191,6 +205,41 @@ export class CodexReasoningProxy {
       disableEffort: config.disableEffort ?? false,
     };
     this.modelEffort = buildCodexModelEffortMap(this.config.modelMap, this.config.defaultEffort);
+  }
+
+  private getRememberedFallback(model: string | null): string | null {
+    if (!model) return null;
+    return this.sessionFallbackByModel.get(normalizeCodexModelId(model)) ?? null;
+  }
+
+  private rememberFallback(requestedModel: string, fallbackModel: string): void {
+    const normalizedRequestedModel = normalizeCodexModelId(requestedModel);
+    const normalizedFallbackModel = normalizeCodexModelId(fallbackModel);
+    if (!normalizedRequestedModel || !normalizedFallbackModel) return;
+    this.sessionFallbackByModel.set(normalizedRequestedModel, normalizedFallbackModel);
+  }
+
+  private buildForwardBody(
+    body: unknown,
+    upstreamModel: string | null,
+    effort: CodexReasoningEffort | null
+  ): unknown {
+    const withUpstreamModel =
+      upstreamModel && isRecord(body) ? { ...body, model: upstreamModel } : body;
+    if (this.config.disableEffort || !effort) {
+      return withUpstreamModel;
+    }
+    return injectReasoningEffortIntoBody(withUpstreamModel, effort);
+  }
+
+  private sendBufferedResponse(
+    clientRes: http.ServerResponse,
+    statusCode: number,
+    headers: http.IncomingHttpHeaders,
+    responseBody: string
+  ): void {
+    clientRes.writeHead(statusCode, headers);
+    clientRes.end(responseBody);
   }
 
   /**
@@ -365,41 +414,48 @@ export class CodexReasoningProxy {
         ? stripExtendedContextSuffix(originalModel)
         : null;
 
-      // When effort is disabled (thinking mode: off), strip model suffix but don't inject reasoning
-      if (this.config.disableEffort) {
-        const suffixParsed = this.parseEffortAlias(normalizedRequestModel);
-        const upstreamModel = suffixParsed?.upstreamModel ?? normalizedRequestModel;
-        const forwarded =
-          upstreamModel && isRecord(parsed) ? { ...parsed, model: upstreamModel } : parsed;
-
-        this.log(`[disabled] model=${originalModel ?? 'null'} -> passthrough (no reasoning)`);
-        await this.forwardJson(req, res, fullUpstreamUrl, forwarded);
-        return;
-      }
-
       // Support "model aliases" like `gpt-5.2-codex-xhigh` by translating to:
       // - upstream model: `gpt-5.2-codex`
       // - reasoning.effort: `xhigh`
       //
       // This allows tier→effort mapping without inventing upstream model IDs.
       const suffixParsed = this.parseEffortAlias(normalizedRequestModel);
-      const upstreamModel = suffixParsed?.upstreamModel ?? normalizedRequestModel;
-      const effort =
+      const requestedUpstreamModel = suffixParsed?.upstreamModel ?? normalizedRequestModel;
+      const rememberedFallback = this.getRememberedFallback(requestedUpstreamModel);
+      const upstreamModel = rememberedFallback ?? requestedUpstreamModel;
+      const requestedEffort =
         suffixParsed?.effort ??
         getEffortForModel(normalizedRequestModel, this.modelEffort, this.config.defaultEffort);
+      const effort =
+        !this.config.disableEffort && upstreamModel
+          ? capEffortAtModelMax(upstreamModel, requestedEffort)
+          : !this.config.disableEffort
+            ? requestedEffort
+            : null;
+      const rewritten = this.buildForwardBody(parsed, upstreamModel, effort);
 
-      const withUpstreamModel =
-        upstreamModel && isRecord(parsed) ? { ...parsed, model: upstreamModel } : parsed;
-      const rewritten = injectReasoningEffortIntoBody(withUpstreamModel, effort);
+      if (effort) {
+        this.record(originalModel, upstreamModel, effort, requestPath);
+        this.trace(
+          `[${new Date().toISOString()}] model=${originalModel ?? 'null'} upstreamModel=${
+            upstreamModel ?? 'null'
+          } effort=${effort} path=${requestPath}`
+        );
+      } else {
+        this.log(`[disabled] model=${originalModel ?? 'null'} -> passthrough (no reasoning)`);
+      }
 
-      this.record(originalModel, upstreamModel, effort, requestPath);
-      this.trace(
-        `[${new Date().toISOString()}] model=${originalModel ?? 'null'} upstreamModel=${
-          upstreamModel ?? 'null'
-        } effort=${effort} path=${requestPath}`
-      );
+      if (rememberedFallback && rememberedFallback !== requestedUpstreamModel) {
+        this.log(`Using remembered fallback ${requestedUpstreamModel} -> ${rememberedFallback}`);
+      }
 
-      await this.forwardJson(req, res, fullUpstreamUrl, rewritten);
+      await this.forwardJson(req, res, fullUpstreamUrl, rewritten, {
+        requestPath,
+        requestedModel: requestedUpstreamModel,
+        attemptedUpstreamModel: upstreamModel,
+        effort,
+        retryCount: 0,
+      });
     } catch (error) {
       const err = error as Error;
       if (!res.headersSent) {
@@ -487,8 +543,9 @@ export class CodexReasoningProxy {
     originalReq: http.IncomingMessage,
     clientRes: http.ServerResponse,
     upstreamUrl: URL,
-    body: unknown
-  ): Promise<void> {
+    body: unknown,
+    context: ForwardJsonContext
+  ): Promise<number> {
     return new Promise((resolve, reject) => {
       const bodyString = JSON.stringify(body);
       const requestFn = this.getRequestFn(upstreamUrl);
@@ -503,9 +560,73 @@ export class CodexReasoningProxy {
           headers: this.buildForwardHeaders(originalReq.headers, bodyString),
         },
         (upstreamRes) => {
-          clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
-          upstreamRes.pipe(clientRes);
-          upstreamRes.on('end', () => resolve());
+          const statusCode = upstreamRes.statusCode || 200;
+          if (statusCode >= 200 && statusCode < 300) {
+            clientRes.writeHead(statusCode, upstreamRes.headers);
+            upstreamRes.pipe(clientRes);
+            upstreamRes.on('end', () => resolve(statusCode));
+            upstreamRes.on('error', reject);
+            return;
+          }
+
+          const chunks: Buffer[] = [];
+          upstreamRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          upstreamRes.on('end', async () => {
+            try {
+              const responseBody = Buffer.concat(chunks).toString('utf8');
+              const unsupportedError =
+                context.retryCount === 0
+                  ? parseCodexUnsupportedModelError(statusCode, responseBody)
+                  : null;
+              const fallbackModel =
+                unsupportedError && context.requestedModel
+                  ? resolveRuntimeCodexFallbackModel({
+                      requestedModel: context.requestedModel,
+                      modelMap: this.config.modelMap,
+                      excludeModels: context.attemptedUpstreamModel
+                        ? [context.attemptedUpstreamModel]
+                        : undefined,
+                    })
+                  : null;
+
+              if (unsupportedError && fallbackModel && context.requestedModel) {
+                const retryEffort =
+                  !this.config.disableEffort && context.effort
+                    ? capEffortAtModelMax(fallbackModel, context.effort)
+                    : null;
+                const retryBody = this.buildForwardBody(body, fallbackModel, retryEffort);
+
+                this.log(
+                  `Upstream rejected model "${context.attemptedUpstreamModel}". Retrying ${context.requestPath} with "${fallbackModel}".`
+                );
+
+                const retryStatusCode = await this.forwardJson(
+                  originalReq,
+                  clientRes,
+                  upstreamUrl,
+                  retryBody,
+                  {
+                    ...context,
+                    attemptedUpstreamModel: fallbackModel,
+                    effort: retryEffort,
+                    retryCount: context.retryCount + 1,
+                  }
+                );
+
+                if (retryStatusCode >= 200 && retryStatusCode < 300) {
+                  this.rememberFallback(context.requestedModel, fallbackModel);
+                }
+
+                resolve(retryStatusCode);
+                return;
+              }
+
+              this.sendBufferedResponse(clientRes, statusCode, upstreamRes.headers, responseBody);
+              resolve(statusCode);
+            } catch (error) {
+              reject(error);
+            }
+          });
           upstreamRes.on('error', reject);
         }
       );

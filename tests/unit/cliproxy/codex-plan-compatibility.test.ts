@@ -3,6 +3,8 @@ import { getProviderCatalog, getModelMaxLevel } from '../../../src/cliproxy/mode
 import {
   getDefaultCodexModel,
   getFreePlanFallbackCodexModel,
+  parseCodexUnsupportedModelError,
+  resolveRuntimeCodexFallbackModel,
 } from '../../../src/cliproxy/codex-plan-compatibility';
 
 describe('codex plan compatibility', () => {
@@ -23,6 +25,50 @@ describe('codex plan compatibility', () => {
     expect(getFreePlanFallbackCodexModel('gpt-5-codex')).toBeNull();
     expect(getFreePlanFallbackCodexModel('gpt-5.2-codex')).toBeNull();
     expect(getFreePlanFallbackCodexModel('gpt-5.1-codex-mini')).toBeNull();
+  });
+
+  it('detects upstream Codex model_not_supported responses', () => {
+    expect(
+      parseCodexUnsupportedModelError(
+        400,
+        JSON.stringify({
+          error: {
+            message: 'The requested model is not supported.',
+            code: 'model_not_supported',
+            param: 'model',
+            type: 'invalid_request_error',
+          },
+        })
+      )
+    ).toEqual({
+      message: 'The requested model is not supported.',
+      code: 'model_not_supported',
+      param: 'model',
+      type: 'invalid_request_error',
+    });
+    expect(
+      parseCodexUnsupportedModelError(500, '{"error":{"code":"model_not_supported"}}')
+    ).toBeNull();
+  });
+
+  it('resolves runtime fallbacks without retrying the rejected model again', () => {
+    expect(
+      resolveRuntimeCodexFallbackModel({
+        requestedModel: 'gpt-5.4',
+        modelMap: { defaultModel: 'gpt-5-codex' },
+      })
+    ).toBe('gpt-5-codex');
+
+    expect(
+      resolveRuntimeCodexFallbackModel({
+        requestedModel: 'gpt-5.4',
+        modelMap: {
+          defaultModel: 'gpt-5.4',
+          haikuModel: 'gpt-5-codex-mini',
+        },
+        excludeModels: ['gpt-5-codex'],
+      })
+    ).toBe('gpt-5-codex-mini');
   });
 
   it('tracks Codex thinking caps for current safe defaults and paid models', () => {
