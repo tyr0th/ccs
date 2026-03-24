@@ -173,6 +173,23 @@ jobs:
             echo "XDG_STATE_HOME=$REVIEW_STATE_HOME"
           } >> "$GITHUB_ENV"
 
+      - name: Resolve runner Bun executable
+        id: bun-path
+        if: needs.prepare.outputs.contributor_source == 'internal'
+        run: |
+          RUNNER_BUN=""
+          if command -v bun >/dev/null 2>&1; then
+            RUNNER_BUN="$(command -v bun)"
+          fi
+
+          echo "path=$RUNNER_BUN" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$RUNNER_BUN" ]; then
+            echo "[i] Using runner Bun executable: $RUNNER_BUN"
+          else
+            echo "[i] No runner Bun executable found; Claude action will install Bun"
+          fi
+
       - name: Generate App Token
         id: app-token
         uses: actions/create-github-app-token@v1
@@ -228,6 +245,7 @@ jobs:
           github_token: ${{ steps.app-token.outputs.token }}
           allowed_non_write_users: ${{ needs.prepare.outputs.contributor_source == 'external' && '*' || '' }}
           path_to_claude_code_executable: ${{ needs.prepare.outputs.claude_path }}
+          path_to_bun_executable: ${{ steps.bun-path.outputs.path }}
           track_progress: false # Disabled - no progress comments, just final review
           prompt: |
             ultrathink
