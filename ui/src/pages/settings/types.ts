@@ -71,20 +71,71 @@ export interface OfficialChannelsConfig {
 
 export interface OfficialChannelStatus {
   id: OfficialChannelId;
+  selected?: boolean;
   displayName: string;
   pluginSpec: string;
   summary: string;
   requiresToken: boolean;
   envKey?: string;
   tokenConfigured: boolean;
+  tokenAvailable?: boolean;
+  tokenSource?: 'saved_env' | 'process_env' | 'missing';
   tokenPath?: string;
+  savedInClaudeState?: boolean;
+  processEnvAvailable?: boolean;
   unavailableReason?: string;
+  setup: {
+    state: 'not_selected' | 'ready' | 'needs_token' | 'needs_claude_setup' | 'unavailable';
+    label: string;
+    detail: string;
+    nextStep: string;
+  };
   manualSetupCommands: string[];
+}
+
+export interface OfficialChannelsVersionStatus {
+  current: string | null;
+  minimum: string;
+  state: 'supported' | 'unsupported' | 'unknown';
+  message: string;
+}
+
+export interface OfficialChannelsAuthStatus {
+  checked: boolean;
+  loggedIn: boolean;
+  authMethod: string | null;
+  subscriptionType: string | null;
+  state: 'eligible' | 'ineligible' | 'unknown';
+  eligible: boolean;
+  message: string;
+  orgRequirementMessage?: string;
 }
 
 export interface OfficialChannelsStatus {
   bunInstalled: boolean;
   supportedProfiles: string[];
+  supportMessage: string;
+  accountStatusCaveat: string;
+  stateScopeMessage: string;
+  claudeVersion: OfficialChannelsVersionStatus;
+  auth: OfficialChannelsAuthStatus;
+  summary: {
+    state: 'ready' | 'needs_setup' | 'limited';
+    title: string;
+    message: string;
+    nextStep: string;
+    blockers: string[];
+  };
+  launchPreview: {
+    state: 'disabled' | 'blocked' | 'partial' | 'ready';
+    title: string;
+    detail: string;
+    command: string;
+    appendedArgs: string[];
+    appliedChannels: OfficialChannelId[];
+    permissionBypassIncluded: boolean;
+    skippedMessages: string[];
+  };
   channels: OfficialChannelStatus[];
 }
 

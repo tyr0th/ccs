@@ -6,22 +6,42 @@ import type { OfficialChannelId } from '../config/unified-config-types';
 import {
   getOfficialChannelEnvDir,
   getOfficialChannelEnvKey,
+  getOfficialChannelStateDirEnvKey,
   getOfficialChannelTokenIds,
   isOfficialChannelTokenRequired,
 } from './official-channels-runtime';
 
-export interface DiscordChannelsSyncResult {
-  synced: boolean;
-  targetPath: string;
-  reason?: 'missing_env' | 'missing_token' | 'already_current' | 'write_failed';
-  error?: string;
+export type OfficialChannelTokenSource = 'saved_env' | 'process_env' | 'missing';
+
+export interface OfficialChannelTokenStatus {
+  available: boolean;
+  source: OfficialChannelTokenSource;
+  envKey?: string;
+  tokenPath?: string;
+  savedInClaudeState: boolean;
+  processEnvAvailable: boolean;
+}
+
+function getResolvedStateDirOverride(
+  channelId: OfficialChannelId,
+  envOverrides?: NodeJS.ProcessEnv | null
+): string | null {
+  const env = envOverrides === undefined ? process.env : envOverrides;
+  const rawStateDir = env?.[getOfficialChannelStateDirEnvKey(channelId)]?.trim();
+
+  return rawStateDir ? path.resolve(rawStateDir) : null;
 }
 
 export function getOfficialChannelEnvPath(
   channelId: OfficialChannelId,
-  configDir = getDefaultClaudeConfigDir()
+  configDir = getDefaultClaudeConfigDir(),
+  envOverrides?: NodeJS.ProcessEnv | null
 ): string {
-  return path.join(configDir, 'channels', getOfficialChannelEnvDir(channelId), '.env');
+  const overrideStateDir = getResolvedStateDirOverride(channelId, envOverrides);
+  const stateDir =
+    overrideStateDir ?? path.join(configDir, 'channels', getOfficialChannelEnvDir(channelId));
+
+  return path.join(stateDir, '.env');
 }
 
 function readFileIfExists(filePath: string): string | null {
@@ -137,6 +157,19 @@ function listManagedClaudeConfigDirs(): string[] {
   return [...dirs];
 }
 
+function listManagedOfficialChannelEnvPaths(channelId: OfficialChannelId): string[] {
+  const envPaths = new Set<string>([
+    getOfficialChannelEnvPath(channelId, getDefaultClaudeConfigDir(), null),
+    getOfficialChannelEnvPath(channelId),
+  ]);
+
+  for (const configDir of listManagedClaudeConfigDirs()) {
+    envPaths.add(getOfficialChannelEnvPath(channelId, configDir, null));
+  }
+
+  return [...envPaths];
+}
+
 export function normalizeDiscordBotToken(value: string): string | null {
   const normalized = value.trim();
   if (!normalized || /[\r\n]/.test(normalized)) {
@@ -171,8 +204,80 @@ export function readConfiguredOfficialChannelToken(channelId: OfficialChannelId)
   return content ? readOfficialChannelTokenFromEnvContent(channelId, content) : null;
 }
 
+export function readOfficialChannelTokenFromProcessEnv(
+  channelId: OfficialChannelId,
+  envOverrides?: NodeJS.ProcessEnv | null
+): string | null {
+  const envKey = getOfficialChannelEnvKey(channelId);
+  if (!envKey) {
+    return null;
+  }
+
+  const rawValue = (envOverrides === undefined ? process.env : envOverrides)?.[envKey];
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  return normalizeDiscordBotToken(rawValue);
+}
+
 export function hasConfiguredOfficialChannelToken(channelId: OfficialChannelId): boolean {
   return readConfiguredOfficialChannelToken(channelId) !== null;
+}
+
+export function getOfficialChannelTokenStatus(
+  channelId: OfficialChannelId,
+  envOverrides?: NodeJS.ProcessEnv | null
+): OfficialChannelTokenStatus {
+  const envKey = getOfficialChannelEnvKey(channelId);
+  if (!envKey) {
+    return {
+      available: true,
+      source: 'saved_env',
+      savedInClaudeState: true,
+      processEnvAvailable: false,
+    };
+  }
+
+  const processEnvToken = readOfficialChannelTokenFromProcessEnv(channelId, envOverrides);
+  const tokenPath = getOfficialChannelEnvPath(channelId);
+  const savedToken = readConfiguredOfficialChannelToken(channelId);
+
+  if (savedToken !== null) {
+    return {
+      available: true,
+      source: 'saved_env',
+      envKey,
+      tokenPath,
+      savedInClaudeState: true,
+      processEnvAvailable: processEnvToken !== null,
+    };
+  }
+
+  if (processEnvToken !== null) {
+    return {
+      available: true,
+      source: 'process_env',
+      envKey,
+      savedInClaudeState: false,
+      processEnvAvailable: true,
+    };
+  }
+
+  return {
+    available: false,
+    source: 'missing',
+    envKey,
+    tokenPath,
+    savedInClaudeState: false,
+    processEnvAvailable: false,
+  };
+}
+
+export function getOfficialChannelReadiness(channelId: OfficialChannelId): boolean {
+  return isOfficialChannelTokenRequired(channelId)
+    ? getOfficialChannelTokenStatus(channelId).available
+    : true;
 }
 
 export function setConfiguredOfficialChannelToken(
@@ -207,9 +312,8 @@ export function clearConfiguredOfficialChannelTokensEverywhere(
   const clearedPaths: string[] = [];
   const channels = channelId ? [channelId] : getOfficialChannelTokenIds();
 
-  for (const configDir of listManagedClaudeConfigDirs()) {
-    for (const tokenChannelId of channels) {
-      const envPath = getOfficialChannelEnvPath(tokenChannelId, configDir);
+  for (const tokenChannelId of channels) {
+    for (const envPath of listManagedOfficialChannelEnvPaths(tokenChannelId)) {
       if (clearOfficialChannelTokenAtPath(tokenChannelId, envPath)) {
         clearedPaths.push(envPath);
       }
@@ -217,53 +321,4 @@ export function clearConfiguredOfficialChannelTokensEverywhere(
   }
 
   return clearedPaths;
-}
-
-export function syncOfficialChannelEnvToConfigDir(
-  channelId: OfficialChannelId,
-  targetConfigDir: string
-): DiscordChannelsSyncResult {
-  const envKey = getOfficialChannelEnvKey(channelId);
-  if (!envKey) {
-    return {
-      synced: false,
-      targetPath: getOfficialChannelEnvPath(channelId, targetConfigDir),
-      reason: 'missing_token',
-    };
-  }
-
-  const sourcePath = getOfficialChannelEnvPath(channelId);
-  const targetPath = getOfficialChannelEnvPath(channelId, targetConfigDir);
-  const token = readConfiguredOfficialChannelToken(channelId);
-
-  if (!fs.existsSync(sourcePath)) {
-    return { synced: false, targetPath, reason: 'missing_env' };
-  }
-
-  if (!token) {
-    return { synced: false, targetPath, reason: 'missing_token' };
-  }
-
-  if (path.resolve(sourcePath) === path.resolve(targetPath)) {
-    return { synced: false, targetPath, reason: 'already_current' };
-  }
-
-  try {
-    const targetContent = readFileIfExists(targetPath) ?? '';
-    writeSecureFile(targetPath, upsertEnvValue(targetContent, envKey, token));
-    return { synced: true, targetPath };
-  } catch (error) {
-    return {
-      synced: false,
-      targetPath,
-      reason: 'write_failed',
-      error: (error as Error).message,
-    };
-  }
-}
-
-export function getOfficialChannelReadiness(channelId: OfficialChannelId): boolean {
-  return isOfficialChannelTokenRequired(channelId)
-    ? hasConfiguredOfficialChannelToken(channelId)
-    : true;
 }

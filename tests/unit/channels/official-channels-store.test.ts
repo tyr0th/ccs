@@ -5,12 +5,13 @@ import * as path from 'path';
 import {
   clearConfiguredOfficialChannelToken,
   clearConfiguredOfficialChannelTokensEverywhere,
+  getOfficialChannelTokenStatus,
   getOfficialChannelEnvPath,
   hasConfiguredOfficialChannelToken,
   readConfiguredOfficialChannelToken,
+  readOfficialChannelTokenFromProcessEnv,
   readOfficialChannelTokenFromEnvContent,
   setConfiguredOfficialChannelToken,
-  syncOfficialChannelEnvToConfigDir,
 } from '../../../src/channels/official-channels-store';
 
 describe('official channels token store', () => {
@@ -55,6 +56,71 @@ describe('official channels token store', () => {
     expect(readConfiguredOfficialChannelToken('telegram')).toBe('telegram-secret');
   });
 
+  it('uses the official state-dir override when one is configured', () => {
+    const originalDiscordStateDir = process.env.DISCORD_STATE_DIR;
+    process.env.DISCORD_STATE_DIR = path.join(tempHome, 'discord-state');
+
+    try {
+      const envPath = setConfiguredOfficialChannelToken('discord', 'discord-secret');
+
+      expect(envPath).toBe(path.join(tempHome, 'discord-state', '.env'));
+      expect(getOfficialChannelEnvPath('discord')).toBe(path.join(tempHome, 'discord-state', '.env'));
+      expect(readConfiguredOfficialChannelToken('discord')).toBe('discord-secret');
+    } finally {
+      if (originalDiscordStateDir !== undefined) {
+        process.env.DISCORD_STATE_DIR = originalDiscordStateDir;
+      } else {
+        delete process.env.DISCORD_STATE_DIR;
+      }
+    }
+  });
+
+  it('treats a current-process env token as available readiness without marking it as saved', () => {
+    const originalDiscordToken = process.env.DISCORD_BOT_TOKEN;
+    process.env.DISCORD_BOT_TOKEN = 'discord-from-env';
+
+    try {
+      expect(readOfficialChannelTokenFromProcessEnv('discord')).toBe('discord-from-env');
+      expect(hasConfiguredOfficialChannelToken('discord')).toBe(false);
+      expect(getOfficialChannelTokenStatus('discord')).toEqual({
+        available: true,
+        source: 'process_env',
+        envKey: 'DISCORD_BOT_TOKEN',
+        savedInClaudeState: false,
+        processEnvAvailable: true,
+      });
+    } finally {
+      if (originalDiscordToken !== undefined) {
+        process.env.DISCORD_BOT_TOKEN = originalDiscordToken;
+      } else {
+        delete process.env.DISCORD_BOT_TOKEN;
+      }
+    }
+  });
+
+  it('prefers current-process env tokens over saved Claude state for readiness source', () => {
+    const originalTelegramToken = process.env.TELEGRAM_BOT_TOKEN;
+    setConfiguredOfficialChannelToken('telegram', 'telegram-saved');
+    process.env.TELEGRAM_BOT_TOKEN = 'telegram-from-env';
+
+    try {
+      expect(getOfficialChannelTokenStatus('telegram')).toEqual({
+        available: true,
+        source: 'saved_env',
+        envKey: 'TELEGRAM_BOT_TOKEN',
+        tokenPath: path.join(tempHome, '.claude', 'channels', 'telegram', '.env'),
+        savedInClaudeState: true,
+        processEnvAvailable: true,
+      });
+    } finally {
+      if (originalTelegramToken !== undefined) {
+        process.env.TELEGRAM_BOT_TOKEN = originalTelegramToken;
+      } else {
+        delete process.env.TELEGRAM_BOT_TOKEN;
+      }
+    }
+  });
+
   it('removes only the channel token entry and deletes the file when nothing remains', () => {
     const envPath = getOfficialChannelEnvPath('discord');
     fs.mkdirSync(path.dirname(envPath), { recursive: true });
@@ -69,46 +135,51 @@ describe('official channels token store', () => {
     expect(fs.existsSync(envPath)).toBe(false);
   });
 
-  it('syncs the canonical env file into an alternate CLAUDE_CONFIG_DIR for account sessions', () => {
-    setConfiguredOfficialChannelToken('discord', 'discord-secret');
-
-    const targetConfigDir = path.join(tempHome, '.ccs', 'instances', 'work');
-    const targetPath = path.join(targetConfigDir, 'channels', 'discord', '.env');
-    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-    fs.writeFileSync(targetPath, '# keep\nOTHER_KEY=value\n', 'utf8');
-
-    const result = syncOfficialChannelEnvToConfigDir('discord', targetConfigDir);
-
-    expect(result.synced).toBe(true);
-    expect(result.targetPath).toBe(targetPath);
-    expect(fs.readFileSync(targetPath, 'utf8')).toBe(
-      '# keep\nOTHER_KEY=value\n\nDISCORD_BOT_TOKEN=discord-secret\n'
-    );
-    expect(fs.statSync(targetPath).mode & 0o777).toBe(0o600);
-  });
-
   it('clears previously synced copies across managed Claude config dirs', () => {
+    const originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
     setConfiguredOfficialChannelToken('discord', 'discord-secret');
     setConfiguredOfficialChannelToken('telegram', 'telegram-secret');
 
     const instanceConfigDir = path.join(tempHome, '.ccs', 'instances', 'work');
-    const instanceEnvPath = path.join(instanceConfigDir, 'channels', 'discord', '.env');
-    const telegramEnvPath = path.join(instanceConfigDir, 'channels', 'telegram', '.env');
+    const processConfigDir = path.join(tempHome, '.claude-account-session');
+    const staleDiscordInstancePath = getOfficialChannelEnvPath('discord', instanceConfigDir);
+    const staleTelegramInstancePath = getOfficialChannelEnvPath('telegram', instanceConfigDir);
+    const staleDiscordProcessPath = getOfficialChannelEnvPath('discord', processConfigDir);
 
-    syncOfficialChannelEnvToConfigDir('discord', instanceConfigDir);
-    syncOfficialChannelEnvToConfigDir('telegram', instanceConfigDir);
-    expect(fs.existsSync(instanceEnvPath)).toBe(true);
-    expect(fs.existsSync(telegramEnvPath)).toBe(true);
+    process.env.CLAUDE_CONFIG_DIR = processConfigDir;
 
-    const clearedPaths = clearConfiguredOfficialChannelTokensEverywhere();
+    try {
+      fs.mkdirSync(path.dirname(staleDiscordInstancePath), { recursive: true });
+      fs.writeFileSync(staleDiscordInstancePath, 'DISCORD_BOT_TOKEN=discord-secret\n', 'utf8');
 
-    expect(clearedPaths).toContain(getOfficialChannelEnvPath('discord'));
-    expect(clearedPaths).toContain(getOfficialChannelEnvPath('telegram'));
-    expect(clearedPaths).toContain(instanceEnvPath);
-    expect(clearedPaths).toContain(telegramEnvPath);
-    expect(fs.existsSync(getOfficialChannelEnvPath('discord'))).toBe(false);
-    expect(fs.existsSync(getOfficialChannelEnvPath('telegram'))).toBe(false);
-    expect(fs.existsSync(instanceEnvPath)).toBe(false);
-    expect(fs.existsSync(telegramEnvPath)).toBe(false);
+      fs.mkdirSync(path.dirname(staleTelegramInstancePath), { recursive: true });
+      fs.writeFileSync(staleTelegramInstancePath, 'TELEGRAM_BOT_TOKEN=telegram-secret\n', 'utf8');
+
+      fs.mkdirSync(path.dirname(staleDiscordProcessPath), { recursive: true });
+      fs.writeFileSync(staleDiscordProcessPath, 'DISCORD_BOT_TOKEN=discord-secret\n', 'utf8');
+
+      expect(fs.existsSync(staleDiscordInstancePath)).toBe(true);
+      expect(fs.existsSync(staleTelegramInstancePath)).toBe(true);
+      expect(fs.existsSync(staleDiscordProcessPath)).toBe(true);
+
+      const clearedPaths = clearConfiguredOfficialChannelTokensEverywhere();
+
+      expect(clearedPaths).toContain(getOfficialChannelEnvPath('discord'));
+      expect(clearedPaths).toContain(getOfficialChannelEnvPath('telegram'));
+      expect(clearedPaths).toContain(staleDiscordInstancePath);
+      expect(clearedPaths).toContain(staleTelegramInstancePath);
+      expect(clearedPaths).toContain(staleDiscordProcessPath);
+      expect(fs.existsSync(getOfficialChannelEnvPath('discord'))).toBe(false);
+      expect(fs.existsSync(getOfficialChannelEnvPath('telegram'))).toBe(false);
+      expect(fs.existsSync(staleDiscordInstancePath)).toBe(false);
+      expect(fs.existsSync(staleTelegramInstancePath)).toBe(false);
+      expect(fs.existsSync(staleDiscordProcessPath)).toBe(false);
+    } finally {
+      if (originalClaudeConfigDir !== undefined) {
+        process.env.CLAUDE_CONFIG_DIR = originalClaudeConfigDir;
+      } else {
+        delete process.env.CLAUDE_CONFIG_DIR;
+      }
+    }
   });
 });

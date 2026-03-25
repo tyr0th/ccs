@@ -79,10 +79,15 @@ function getLockFilePath(): string {
 
 function acquireLock(): string | null {
   const lockPath = getLockFilePath();
+  const lockDir = path.dirname(lockPath);
   const lockToken = crypto.randomUUID();
   const lockData = `${process.pid}\n${Date.now()}\n${lockToken}`;
 
   try {
+    if (!fs.existsSync(lockDir)) {
+      fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 });
+    }
+
     // Check if lock exists
     if (fs.existsSync(lockPath)) {
       const content = fs.readFileSync(lockPath, 'utf8');
@@ -304,17 +309,21 @@ interface LegacyDiscordChannelsConfig {
 function normalizeOfficialChannelsConfig(
   partial: Partial<UnifiedConfig> & { discord_channels?: LegacyDiscordChannelsConfig }
 ): OfficialChannelsConfig {
-  const rawSelected = Array.isArray(partial.channels?.selected)
-    ? partial.channels.selected.filter((value): value is OfficialChannelId =>
-        isOfficialChannelId(value)
-      )
-    : [];
+  const hasCanonicalChannelsSection = partial.channels !== undefined;
+  const hasExplicitSelectedField =
+    hasCanonicalChannelsSection &&
+    Object.prototype.hasOwnProperty.call(partial.channels, 'selected');
+  const rawSelected =
+    hasExplicitSelectedField && Array.isArray(partial.channels?.selected)
+      ? partial.channels.selected.filter((value): value is OfficialChannelId =>
+          isOfficialChannelId(value)
+        )
+      : [];
 
   return {
-    selected:
-      rawSelected.length > 0
-        ? normalizeOfficialChannelIds(rawSelected)
-        : resolveLegacyDiscordSelection(partial.discord_channels?.enabled),
+    selected: hasCanonicalChannelsSection
+      ? normalizeOfficialChannelIds(rawSelected)
+      : resolveLegacyDiscordSelection(partial.discord_channels?.enabled),
     unattended:
       partial.channels?.unattended ??
       partial.discord_channels?.unattended ??

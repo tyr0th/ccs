@@ -36,17 +36,11 @@ import { fail, info, warn } from './utils/ui';
 import { isCopilotSubcommandToken } from './copilot/constants';
 import {
   buildOfficialChannelsArgs,
-  getOfficialChannelDisplayName,
-  getOfficialChannelTokenIds,
-  isBunAvailable,
+  getOfficialChannelsEnvironmentStatus,
   officialChannelRequiresMacOS,
   resolveOfficialChannelsLaunchPlan,
-  resolveOfficialChannelsSyncConfigDir,
 } from './channels/official-channels-runtime';
-import {
-  getOfficialChannelReadiness,
-  syncOfficialChannelEnvToConfigDir,
-} from './channels/official-channels-store';
+import { getOfficialChannelReadiness } from './channels/official-channels-store';
 
 // Import centralized error handling
 import { handleError, runCleanup } from './errors';
@@ -149,6 +143,9 @@ function resolveNativeClaudeLaunchArgs(
   targetConfigDir?: string
 ): string[] {
   const config = getOfficialChannelsConfig();
+  const environment = getOfficialChannelsEnvironmentStatus(
+    targetConfigDir ? { CLAUDE_CONFIG_DIR: targetConfigDir } : undefined
+  );
   const channelReadiness = {
     telegram: getOfficialChannelReadiness('telegram'),
     discord: getOfficialChannelReadiness('discord'),
@@ -159,7 +156,7 @@ function resolveNativeClaudeLaunchArgs(
     config,
     target: 'claude',
     profileType,
-    bunAvailable: isBunAvailable(),
+    environment,
     channelReadiness,
   });
 
@@ -167,37 +164,19 @@ function resolveNativeClaudeLaunchArgs(
     console.error(warn(message));
   }
 
+  if (
+    config.selected.length > 0 &&
+    environment.auth.state === 'eligible' &&
+    environment.auth.orgRequirementMessage
+  ) {
+    console.error(warn(environment.auth.orgRequirementMessage));
+  }
+
   if (!plan.applied) {
     return args;
   }
 
-  const activeConfigDir = resolveOfficialChannelsSyncConfigDir(targetConfigDir);
-  const syncedChannels = [...plan.appliedChannels];
-
-  if (activeConfigDir) {
-    for (const channelId of [...syncedChannels]) {
-      if (!getOfficialChannelTokenIds().includes(channelId)) {
-        continue;
-      }
-
-      const syncResult = syncOfficialChannelEnvToConfigDir(channelId, activeConfigDir);
-      if (!syncResult.synced && syncResult.reason !== 'already_current') {
-        const suffix = syncResult.error ? ` (${syncResult.error})` : '';
-        console.error(
-          warn(
-            `${getOfficialChannelDisplayName(channelId)} auto-enable skipped: failed to sync channel env to ${syncResult.targetPath}${suffix}`
-          )
-        );
-        syncedChannels.splice(syncedChannels.indexOf(channelId), 1);
-      }
-    }
-  }
-
-  if (syncedChannels.length === 0) {
-    return args;
-  }
-
-  return buildOfficialChannelsArgs(args, syncedChannels, plan.wantsPermissionBypass);
+  return buildOfficialChannelsArgs(args, plan.appliedChannels, plan.wantsPermissionBypass);
 }
 
 async function main(): Promise<void> {

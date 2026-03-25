@@ -8,18 +8,22 @@ import type { OfficialChannelId } from '../config/unified-config-types';
 import { DEFAULT_OFFICIAL_CHANNELS_CONFIG } from '../config/unified-config-types';
 import {
   clearConfiguredOfficialChannelTokensEverywhere,
-  getOfficialChannelEnvPath,
+  getOfficialChannelTokenStatus,
   hasConfiguredOfficialChannelToken,
   setConfiguredOfficialChannelToken,
 } from '../channels/official-channels-store';
 import {
+  buildOfficialChannelsLaunchPreview,
+  buildOfficialChannelsReadinessSummary,
+  buildOfficialChannelSetupSummary,
   expandOfficialChannelSelection,
   getChannelConfigSelectionLabel,
   getOfficialChannelChoices,
+  getOfficialChannelsAccountStatusCaveat,
+  getOfficialChannelsSupportMessage,
   getOfficialChannelDisplayName,
   getOfficialChannelEnvKey,
   getOfficialChannelManualSetupCommands,
-  getOfficialChannelReadyMessage,
   getOfficialChannelsCompatibilityMessage,
   getOfficialChannelsDocsSummary,
   getOfficialChannelsLegacyEnableHelp,
@@ -28,12 +32,12 @@ import {
   getOfficialChannelClearTokenHelp,
   getOfficialChannelMacOSHelp,
   getOfficialChannelSummary,
+  getOfficialChannelsEnvironmentStatus,
   getOfficialChannelsRuntimeNote,
   getOfficialChannelsSectionDescription,
   getOfficialChannelsSupportedProfiles,
   getOfficialChannelUnavailableReason,
   getOfficialChannelTokenIds,
-  isBunAvailable,
   isOfficialChannelId,
   isOfficialChannelSelectionValid,
 } from '../channels/official-channels-runtime';
@@ -128,6 +132,9 @@ function showHelp(): void {
   console.log('');
   console.log(`  ${getOfficialChannelsSectionDescription()}`);
   console.log(`  ${dim(getOfficialChannelsDocsSummary())}`);
+  console.log(
+    `  ${dim('Fastest path: run `ccs config`, open Settings -> Channels, turn on the channel, save the token if needed, then run `ccs`.')}`
+  );
   console.log('');
   console.log(subheader('Usage:'));
   console.log(`  ${color('ccs config channels', 'command')} [options]`);
@@ -135,8 +142,12 @@ function showHelp(): void {
   console.log(subheader('Options:'));
   console.log(`  ${color('--set <csv|all>', 'command')}      ${getOfficialChannelsSetHelp()}`);
   console.log(`  ${color('--clear', 'command')}              Clear all selected channels`);
-  console.log(`  ${color('--enable', 'command')}             Legacy alias: add Discord`);
-  console.log(`  ${color('--disable', 'command')}            Legacy alias: remove Discord`);
+  console.log(
+    `  ${color('--enable', 'command')}             Legacy compatibility alias: add Discord`
+  );
+  console.log(
+    `  ${color('--disable', 'command')}            Legacy compatibility alias: remove Discord`
+  );
   console.log(
     `  ${color('--unattended', 'command')}         Also add --dangerously-skip-permissions`
   );
@@ -148,6 +159,9 @@ function showHelp(): void {
   console.log(`  ${color('--help, -h', 'command')}           Show this help`);
   console.log('');
   console.log(subheader('Examples:'));
+  console.log(
+    `  $ ${color('ccs config', 'command')}                                    ${dim('# Dashboard -> Settings -> Channels (fastest path)')}`
+  );
   console.log(
     `  $ ${color('ccs config channels', 'command')}                           ${dim('# Show status')}`
   );
@@ -163,60 +177,173 @@ function showHelp(): void {
   console.log(
     `  $ ${color('ccs config channels --clear-token discord', 'command')}   ${dim('# Clear one token')}`
   );
+  console.log(
+    `  ${dim('Official Channels only work on native Claude default/account sessions, not on ccs glm or other API/OAuth/Droid targets.')}`
+  );
   console.log('');
 }
 
 function showStatus(): void {
   const config = getOfficialChannelsConfig();
   const selected = config.selected;
-  const bunReady = isBunAvailable();
+  const environment = getOfficialChannelsEnvironmentStatus();
+  const channelRows = expandOfficialChannelSelection('all').map((channelId) => {
+    const selectedForLaunch = selected.includes(channelId);
+    const tokenStatus = getOfficialChannelTokenStatus(channelId);
+
+    return {
+      id: channelId,
+      displayName: getOfficialChannelDisplayName(channelId),
+      selected: selectedForLaunch,
+      requiresToken: getOfficialChannelTokenIds().includes(channelId),
+      tokenConfigured: hasConfiguredOfficialChannelToken(channelId),
+      tokenStatus,
+      unavailableReason: getOfficialChannelUnavailableReason(channelId),
+      setup: buildOfficialChannelSetupSummary({
+        id: channelId,
+        displayName: getOfficialChannelDisplayName(channelId),
+        selected: selectedForLaunch,
+        requiresToken: getOfficialChannelTokenIds().includes(channelId),
+        tokenAvailable: tokenStatus.available,
+        tokenSource: tokenStatus.source,
+        savedInClaudeState: tokenStatus.savedInClaudeState,
+        processEnvAvailable: tokenStatus.processEnvAvailable,
+        unavailableReason: getOfficialChannelUnavailableReason(channelId),
+      }),
+    };
+  });
+  const summary = buildOfficialChannelsReadinessSummary({
+    config,
+    environment,
+    channels: channelRows.map((channel) => ({
+      id: channel.id,
+      displayName: channel.displayName,
+      selected: channel.selected,
+      requiresToken: channel.requiresToken,
+      tokenAvailable: channel.tokenStatus.available,
+      tokenSource: channel.tokenStatus.source,
+      savedInClaudeState: channel.tokenStatus.savedInClaudeState,
+      processEnvAvailable: channel.tokenStatus.processEnvAvailable,
+      unavailableReason: channel.unavailableReason,
+    })),
+  });
+  const launchPreview = buildOfficialChannelsLaunchPreview({
+    config,
+    environment,
+    channels: channelRows.map((channel) => ({
+      id: channel.id,
+      displayName: channel.displayName,
+      selected: channel.selected,
+      requiresToken: channel.requiresToken,
+      tokenAvailable: channel.tokenStatus.available,
+      tokenSource: channel.tokenStatus.source,
+      savedInClaudeState: channel.tokenStatus.savedInClaudeState,
+      processEnvAvailable: channel.tokenStatus.processEnvAvailable,
+      unavailableReason: channel.unavailableReason,
+    })),
+  });
 
   console.log('');
   console.log(header('Official Channels Configuration'));
   console.log('');
   console.log(
+    `  Status:       ${
+      summary.state === 'ready'
+        ? ok(summary.title)
+        : summary.state === 'limited'
+          ? warn(summary.title)
+          : warn(summary.title)
+    }`
+  );
+  console.log(`  ${dim(summary.message)}`);
+  console.log(`  ${dim(summary.nextStep)}`);
+  console.log('');
+  console.log(`  Launch:       ${info(launchPreview.title)}`);
+  console.log(`  ${dim(launchPreview.detail)}`);
+  if (launchPreview.appendedArgs.length > 0) {
+    console.log(`  ${dim(`ccs adds: ${launchPreview.appendedArgs.join(' ')}`)}`);
+  }
+  if (launchPreview.skippedMessages.length > 0) {
+    console.log(`  ${dim(`Skipped: ${launchPreview.skippedMessages.join(' | ')}`)}`);
+  }
+  console.log('');
+  console.log(
     `  Channels:     ${selected.length > 0 ? ok(getChannelConfigSelectionLabel(selected)) : warn('Disabled')}`
   );
   console.log(`  Unattended:   ${config.unattended ? warn('Enabled') : info('Disabled')}`);
-  console.log(`  Bun:          ${bunReady ? ok('Installed') : warn('Missing')}`);
+  console.log(`  Bun:          ${environment.bunInstalled ? ok('Installed') : warn('Missing')}`);
+  console.log(
+    `  Claude Code:  ${
+      environment.claudeVersion.state === 'supported'
+        ? ok(environment.claudeVersion.message)
+        : environment.claudeVersion.state === 'unsupported'
+          ? warn(environment.claudeVersion.message)
+          : info(environment.claudeVersion.message)
+    }`
+  );
+  console.log(
+    `  Claude Auth:  ${
+      environment.auth.state === 'eligible'
+        ? ok(environment.auth.message)
+        : environment.auth.state === 'ineligible'
+          ? warn(environment.auth.message)
+          : info(environment.auth.message)
+    }`
+  );
   console.log('');
   console.log(subheader('Applies To:'));
-  console.log(`  ${dim(getOfficialChannelsCompatibilityMessage())}`);
+  console.log(`  ${dim(getOfficialChannelsSupportMessage())}`);
   console.log(
     `  ${dim(`Supported profiles: ${getOfficialChannelsSupportedProfiles().join(', ')}`)}`
   );
+  console.log(`  ${dim(environment.stateScopeMessage)}`);
+  console.log(`  ${dim(getOfficialChannelsAccountStatusCaveat())}`);
+  if (environment.auth.orgRequirementMessage) {
+    console.log(`  ${dim(environment.auth.orgRequirementMessage)}`);
+  }
   console.log('');
   console.log(subheader('Channels:'));
-  for (const channelId of expandOfficialChannelSelection('all')) {
-    const displayName = getOfficialChannelDisplayName(channelId);
-    const enabled = selected.includes(channelId);
-    const envKey = getOfficialChannelEnvKey(channelId);
-    const tokenConfigured = envKey ? hasConfiguredOfficialChannelToken(channelId) : true;
-    const unavailableReason = getOfficialChannelUnavailableReason(channelId);
-    const status = unavailableReason
-      ? warn(unavailableReason)
-      : envKey
-        ? tokenConfigured
-          ? ok('Ready')
-          : warn(`${envKey} missing`)
-        : ok('Ready');
-    console.log(`  ${enabled ? '[x]' : '[ ]'} ${displayName}: ${status}`);
-    console.log(`      ${dim(getOfficialChannelSummary(channelId))}`);
-    if (envKey) {
-      console.log(
-        `      ${dim(`${envKey}: ${tokenConfigured ? 'configured' : 'not configured'}`)}`
-      );
-      console.log(`      ${dim(getOfficialChannelEnvPath(channelId))}`);
+  for (const channel of channelRows) {
+    const status =
+      channel.setup.state === 'ready'
+        ? ok(channel.setup.label)
+        : channel.setup.state === 'not_selected'
+          ? info(channel.setup.label)
+          : warn(channel.setup.label);
+    console.log(`  ${channel.selected ? '[x]' : '[ ]'} ${channel.displayName}: ${status}`);
+    console.log(`      ${dim(getOfficialChannelSummary(channel.id))}`);
+    console.log(`      ${dim(channel.setup.detail)}`);
+    console.log(`      ${dim(channel.setup.nextStep)}`);
+    if (channel.requiresToken) {
+      const envKey = getOfficialChannelEnvKey(channel.id) ?? '';
+      if (channel.tokenStatus.source === 'saved_env') {
+        console.log(`      ${dim(`${envKey}: saved in Claude channel state`)}`);
+        if (channel.tokenStatus.processEnvAvailable) {
+          console.log(`      ${dim(`${envKey}: also available from current CCS process env`)}`);
+        }
+        if (channel.tokenStatus.tokenPath) {
+          console.log(`      ${dim(channel.tokenStatus.tokenPath)}`);
+        }
+      } else if (channel.tokenStatus.source === 'process_env') {
+        console.log(`      ${dim(`${envKey}: available from current CCS process env`)}`);
+      } else {
+        console.log(`      ${dim(`${envKey}: missing`)}`);
+        if (channel.tokenStatus.tokenPath) {
+          console.log(`      ${dim(channel.tokenStatus.tokenPath)}`);
+        }
+      }
     }
-    console.log(`      ${dim(getOfficialChannelReadyMessage(channelId))}`);
   }
   console.log('');
   console.log(subheader('Notes:'));
   console.log(`  ${dim(getOfficialChannelsLegacyEnableHelp())}`);
+  console.log(`  ${dim(environment.stateScopeMessage)}`);
   console.log(`  ${dim(getOfficialChannelMacOSHelp())}`);
   console.log(`  ${dim(getOfficialChannelsRuntimeNote())}`);
+  console.log(`  ${dim(getOfficialChannelsCompatibilityMessage())}`);
+  console.log(`  ${dim(getOfficialChannelsAccountStatusCaveat())}`);
   console.log('');
-  console.log(subheader('Manual Claude Setup:'));
+  console.log(subheader('Claude-side Setup:'));
   for (const channelId of expandOfficialChannelSelection('all')) {
     console.log(`  ${dim(`${getOfficialChannelDisplayName(channelId)}:`)}`);
     for (const command of getOfficialChannelManualSetupCommands(channelId)) {

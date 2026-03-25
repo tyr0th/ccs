@@ -312,7 +312,10 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['ccs config auth setup', 'Configure dashboard login'],
     ['ccs config auth show', 'Show dashboard auth status'],
     ['ccs config channels', 'Show Official Channels status'],
-    ['ccs config channels --set telegram,discord', 'Auto-enable Telegram + Discord'],
+    [
+      'ccs config channels --set telegram,discord',
+      'Auto-add Telegram + Discord on supported native Claude runs',
+    ],
     ['ccs config channels --set-token telegram=<token>', 'Save TELEGRAM_BOT_TOKEN'],
     ['ccs config image-analysis', 'Show image analysis settings'],
     ['ccs config image-analysis --enable', 'Enable image analysis'],
@@ -470,10 +473,11 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   ]);
 
   printSubSection('Official Channels (official Claude plugins)', [
+    ['ccs config', 'Dashboard -> Settings -> Channels (fastest path)'],
     ['ccs config channels', 'Show current status'],
     [
       'ccs config channels --set telegram,discord',
-      'Auto-add selected channels on native Claude sessions',
+      'Auto-add selected channels on native Claude default/account sessions',
     ],
     ['ccs config channels --set all', 'Enable Telegram, Discord, and iMessage'],
     ['ccs config channels --unattended', 'Also add --dangerously-skip-permissions'],
@@ -481,8 +485,11 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['ccs config channels --set-token discord=<token>', 'Save DISCORD_BOT_TOKEN'],
     ['ccs config channels --clear-token [channel]', 'Remove one or all saved channel tokens'],
     ['', ''],
-    ['Note:', 'Runtime-only. Applies to native Claude default/account sessions.'],
+    ['', 'Fastest path: turn on the channel, save the token if needed, then run ccs.'],
+    ['Note:', 'Runtime-only. Applies to native Claude default/account sessions only.'],
+    ['', 'Not supported for ccs glm, other API/OAuth profiles, or Droid targets.'],
     ['', 'Telegram/Discord tokens live in ~/.claude/channels/<channel>/.env.'],
+    ['', 'Current-process TELEGRAM_BOT_TOKEN / DISCORD_BOT_TOKEN also work for that launch.'],
     ['', 'iMessage is macOS-only and requires local OS permissions instead of a bot token.'],
   ]);
 
@@ -554,6 +561,4 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   // License
   console.log(dim('License: MIT'));
   console.log('');
-
-  process.exit(0);
 }

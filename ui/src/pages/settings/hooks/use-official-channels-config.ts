@@ -6,6 +6,15 @@ const DEFAULT_CONFIG: OfficialChannelsConfig = {
   unattended: false,
 };
 
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await response.json()) as { error?: unknown };
+    return typeof data.error === 'string' && data.error.trim().length > 0 ? data.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function useOfficialChannelsConfig() {
   const [config, setConfig] = useState<OfficialChannelsConfig>(DEFAULT_CONFIG);
   const [status, setStatus] = useState<OfficialChannelsStatus | null>(null);
@@ -19,13 +28,13 @@ export function useOfficialChannelsConfig() {
     window.setTimeout(() => setSuccess(null), 1500);
   }, []);
 
-  const fetchConfig = useCallback(async () => {
+  const fetchConfig = useCallback(async (): Promise<boolean> => {
     try {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/channels');
       if (!res.ok) {
-        throw new Error('Failed to load Official Channels settings');
+        throw new Error(await readErrorMessage(res, 'Failed to load Official Channels settings'));
       }
 
       const data = (await res.json()) as {
@@ -35,15 +44,20 @@ export function useOfficialChannelsConfig() {
 
       setConfig(data.config ?? DEFAULT_CONFIG);
       setStatus(data.status ?? null);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
+      return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
   const updateConfig = useCallback(
-    async (updates: Partial<OfficialChannelsConfig>, successMessage = 'Settings saved') => {
+    async (
+      updates: Partial<OfficialChannelsConfig>,
+      successMessage = 'Settings saved'
+    ): Promise<boolean> => {
       try {
         setSaving(true);
         setError(null);
@@ -55,24 +69,25 @@ export function useOfficialChannelsConfig() {
         });
 
         if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-          throw new Error(data.error || 'Failed to save Official Channels settings');
+          throw new Error(await readErrorMessage(res, 'Failed to save Official Channels settings'));
         }
 
         const data = (await res.json()) as { config?: OfficialChannelsConfig };
-        setConfig(data.config ?? { ...config, ...updates });
+        setConfig((current) => data.config ?? { ...current, ...updates });
         flashSuccess(successMessage);
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
+        return false;
       } finally {
         setSaving(false);
       }
     },
-    [config, flashSuccess]
+    [flashSuccess]
   );
 
   const saveToken = useCallback(
-    async (channelId: OfficialChannelId, token: string) => {
+    async (channelId: OfficialChannelId, token: string): Promise<boolean> => {
       try {
         setSaving(true);
         setError(null);
@@ -84,14 +99,19 @@ export function useOfficialChannelsConfig() {
         });
 
         if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-          throw new Error(data.error || `Failed to save ${channelId} token`);
+          throw new Error(await readErrorMessage(res, `Failed to save ${channelId} token`));
         }
 
-        await fetchConfig();
+        const refreshed = await fetchConfig();
+        if (!refreshed) {
+          return false;
+        }
+
         flashSuccess(`${channelId} token saved`);
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
+        return false;
       } finally {
         setSaving(false);
       }
@@ -100,7 +120,7 @@ export function useOfficialChannelsConfig() {
   );
 
   const clearToken = useCallback(
-    async (channelId: OfficialChannelId) => {
+    async (channelId: OfficialChannelId): Promise<boolean> => {
       try {
         setSaving(true);
         setError(null);
@@ -110,14 +130,19 @@ export function useOfficialChannelsConfig() {
         });
 
         if (!res.ok) {
-          const data = (await res.json()) as { error?: string };
-          throw new Error(data.error || `Failed to clear ${channelId} token`);
+          throw new Error(await readErrorMessage(res, `Failed to clear ${channelId} token`));
         }
 
-        await fetchConfig();
+        const refreshed = await fetchConfig();
+        if (!refreshed) {
+          return false;
+        }
+
         flashSuccess(`${channelId} token cleared`);
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
+        return false;
       } finally {
         setSaving(false);
       }

@@ -2,48 +2,110 @@ import { Router, type Request, type Response } from 'express';
 import { getOfficialChannelsConfig, mutateUnifiedConfig } from '../../config/unified-config-loader';
 import {
   clearConfiguredOfficialChannelTokensEverywhere,
-  getOfficialChannelEnvPath,
-  getOfficialChannelReadiness,
+  getOfficialChannelTokenStatus,
   hasConfiguredOfficialChannelToken,
   setConfiguredOfficialChannelToken,
 } from '../../channels/official-channels-store';
 import {
+  buildOfficialChannelsLaunchPreview,
+  buildOfficialChannelsReadinessSummary,
+  buildOfficialChannelSetupSummary,
   expandOfficialChannelSelection,
+  getOfficialChannelsAccountStatusCaveat,
   getOfficialChannelDisplayName,
   getOfficialChannelEnvKey,
   getOfficialChannelPluginSpec,
   getOfficialChannelSummary,
+  getOfficialChannelsSupportMessage,
   getOfficialChannelUnavailableReason,
-  getOfficialChannelsSupportedProfiles,
+  getOfficialChannelsEnvironmentStatus,
   getOfficialChannelManualSetupCommands,
   getOfficialChannelTokenIds,
-  isBunAvailable,
   isOfficialChannelId,
 } from '../../channels/official-channels-runtime';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 
 const router = Router();
 
-function buildChannelsStatus() {
-  return {
-    bunInstalled: isBunAvailable(),
-    supportedProfiles: getOfficialChannelsSupportedProfiles(),
-    channels: expandOfficialChannelSelection('all').map((channelId) => ({
+function buildChannelsStatus(config = getOfficialChannelsConfig()) {
+  const environment = getOfficialChannelsEnvironmentStatus();
+  const channels = expandOfficialChannelSelection('all').map((channelId) => {
+    const tokenStatus = getOfficialChannelTokenIds().includes(channelId)
+      ? getOfficialChannelTokenStatus(channelId)
+      : undefined;
+    const selected = config.selected.includes(channelId);
+
+    return {
       id: channelId,
+      selected,
       displayName: getOfficialChannelDisplayName(channelId),
       pluginSpec: getOfficialChannelPluginSpec(channelId),
       summary: getOfficialChannelSummary(channelId),
       requiresToken: getOfficialChannelTokenIds().includes(channelId),
       envKey: getOfficialChannelEnvKey(channelId),
-      tokenConfigured: getOfficialChannelTokenIds().includes(channelId)
-        ? hasConfiguredOfficialChannelToken(channelId)
-        : getOfficialChannelReadiness(channelId),
-      tokenPath: getOfficialChannelTokenIds().includes(channelId)
-        ? getOfficialChannelEnvPath(channelId)
-        : undefined,
+      tokenConfigured:
+        getOfficialChannelTokenIds().includes(channelId) &&
+        hasConfiguredOfficialChannelToken(channelId),
+      tokenAvailable: tokenStatus?.available ?? false,
+      tokenSource: tokenStatus?.source,
+      tokenPath: tokenStatus?.tokenPath,
+      savedInClaudeState: tokenStatus?.savedInClaudeState ?? false,
+      processEnvAvailable: tokenStatus?.processEnvAvailable ?? false,
       unavailableReason: getOfficialChannelUnavailableReason(channelId),
       manualSetupCommands: getOfficialChannelManualSetupCommands(channelId),
-    })),
+      setup: buildOfficialChannelSetupSummary({
+        id: channelId,
+        displayName: getOfficialChannelDisplayName(channelId),
+        selected,
+        requiresToken: getOfficialChannelTokenIds().includes(channelId),
+        tokenAvailable: tokenStatus?.available ?? false,
+        tokenSource: tokenStatus?.source,
+        savedInClaudeState: tokenStatus?.savedInClaudeState ?? false,
+        processEnvAvailable: tokenStatus?.processEnvAvailable ?? false,
+        unavailableReason: getOfficialChannelUnavailableReason(channelId),
+      }),
+    };
+  });
+
+  return {
+    bunInstalled: environment.bunInstalled,
+    supportedProfiles: environment.supportedProfiles,
+    supportMessage: getOfficialChannelsSupportMessage(),
+    accountStatusCaveat: getOfficialChannelsAccountStatusCaveat(),
+    stateScopeMessage: environment.stateScopeMessage,
+    claudeVersion: environment.claudeVersion,
+    auth: environment.auth,
+    summary: buildOfficialChannelsReadinessSummary({
+      config,
+      environment,
+      channels: channels.map((channel) => ({
+        id: channel.id,
+        displayName: channel.displayName,
+        selected: channel.selected,
+        requiresToken: channel.requiresToken,
+        tokenAvailable: channel.tokenAvailable,
+        tokenSource: channel.tokenSource,
+        savedInClaudeState: channel.savedInClaudeState,
+        processEnvAvailable: channel.processEnvAvailable,
+        unavailableReason: channel.unavailableReason,
+      })),
+    }),
+    launchPreview: buildOfficialChannelsLaunchPreview({
+      config,
+      environment,
+      channels: channels.map((channel) => ({
+        id: channel.id,
+        displayName: channel.displayName,
+        selected: channel.selected,
+        requiresToken: channel.requiresToken,
+        tokenAvailable: channel.tokenAvailable,
+        tokenSource: channel.tokenSource,
+        savedInClaudeState: channel.savedInClaudeState,
+        processEnvAvailable: channel.processEnvAvailable,
+        unavailableReason: channel.unavailableReason,
+      })),
+    }),
+    channels,
   };
 }
 
@@ -60,9 +122,10 @@ router.use((req: Request, res: Response, next) => {
 });
 
 router.get('/', (_req: Request, res: Response): void => {
+  const config = getOfficialChannelsConfig();
   res.json({
-    config: getOfficialChannelsConfig(),
-    status: buildChannelsStatus(),
+    config,
+    status: buildChannelsStatus(config),
   });
 });
 
@@ -85,7 +148,8 @@ router.put('/', (req: Request, res: Response): void => {
   try {
     const updated = mutateUnifiedConfig((config) => {
       config.channels = {
-        selected: selected ? [...new Set(selected)] : (config.channels?.selected ?? []),
+        selected:
+          selected !== undefined ? [...new Set(selected)] : (config.channels?.selected ?? []),
         unattended: unattended ?? config.channels?.unattended ?? false,
       };
     });
@@ -132,7 +196,6 @@ router.delete('/:channelId/token', (req: Request, res: Response): void => {
     res.json({
       success: true,
       tokenConfigured: false,
-      tokenPath: getOfficialChannelEnvPath(channelId),
       clearedPaths,
     });
   } catch (error) {

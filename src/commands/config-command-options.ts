@@ -92,6 +92,8 @@ export function showConfigCommandHelp(): void {
   console.log('    --set-token <s>  Save channel token (telegram=<t> or discord=<t>)');
   console.log('    --clear-token    Remove all saved channel tokens');
   console.log('    --clear-token <c> Remove one saved channel token');
+  console.log('                     Works only for native Claude default/account sessions');
+  console.log('                     Not for ccs glm, other API/OAuth profiles, or Droid targets');
   console.log('');
   console.log('  auth               Manage dashboard authentication');
   console.log('    auth setup       Configure username and password');
