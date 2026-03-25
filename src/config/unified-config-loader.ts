@@ -21,6 +21,7 @@ import {
   DEFAULT_CLIPROXY_SAFETY_CONFIG,
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
   DEFAULT_THINKING_CONFIG,
+  DEFAULT_OFFICIAL_CHANNELS_CONFIG,
   DEFAULT_DASHBOARD_AUTH_CONFIG,
   DEFAULT_IMAGE_ANALYSIS_CONFIG,
 } from './unified-config-types';
@@ -29,6 +30,8 @@ import type {
   CLIProxySafetyConfig,
   GlobalEnvConfig,
   ThinkingConfig,
+  OfficialChannelsConfig,
+  OfficialChannelId,
   DashboardAuthConfig,
   ImageAnalysisConfig,
   CursorConfig,
@@ -36,6 +39,11 @@ import type {
 } from './unified-config-types';
 import { validateCompositeTiers } from '../cliproxy/composite-validator';
 import { isUnifiedConfigEnabled } from './feature-flags';
+import {
+  isOfficialChannelId,
+  normalizeOfficialChannelIds,
+  resolveLegacyDiscordSelection,
+} from '../channels/official-channels-runtime';
 
 const CONFIG_YAML = 'config.yaml';
 const CONFIG_JSON = 'config.json';
@@ -71,10 +79,15 @@ function getLockFilePath(): string {
 
 function acquireLock(): string | null {
   const lockPath = getLockFilePath();
+  const lockDir = path.dirname(lockPath);
   const lockToken = crypto.randomUUID();
   const lockData = `${process.pid}\n${Date.now()}\n${lockToken}`;
 
   try {
+    if (!fs.existsSync(lockDir)) {
+      fs.mkdirSync(lockDir, { recursive: true, mode: 0o700 });
+    }
+
     // Check if lock exists
     if (fs.existsSync(lockPath)) {
       const content = fs.readFileSync(lockPath, 'utf8');
@@ -285,6 +298,36 @@ function normalizeContinuityConfig(partial: Partial<UnifiedConfig>): ContinuityC
       ...(legacyMap ?? {}),
       ...(continuityMap ?? {}),
     },
+  };
+}
+
+interface LegacyDiscordChannelsConfig {
+  enabled?: boolean;
+  unattended?: boolean;
+}
+
+function normalizeOfficialChannelsConfig(
+  partial: Partial<UnifiedConfig> & { discord_channels?: LegacyDiscordChannelsConfig }
+): OfficialChannelsConfig {
+  const hasCanonicalChannelsSection = partial.channels !== undefined;
+  const hasExplicitSelectedField =
+    hasCanonicalChannelsSection &&
+    Object.prototype.hasOwnProperty.call(partial.channels, 'selected');
+  const rawSelected =
+    hasExplicitSelectedField && Array.isArray(partial.channels?.selected)
+      ? partial.channels.selected.filter((value): value is OfficialChannelId =>
+          isOfficialChannelId(value)
+        )
+      : [];
+
+  return {
+    selected: hasCanonicalChannelsSection
+      ? normalizeOfficialChannelIds(rawSelected)
+      : resolveLegacyDiscordSelection(partial.discord_channels?.enabled),
+    unattended:
+      partial.channels?.unattended ??
+      partial.discord_channels?.unattended ??
+      DEFAULT_OFFICIAL_CHANNELS_CONFIG.unattended,
   };
 }
 
@@ -499,6 +542,9 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       provider_overrides: partial.thinking?.provider_overrides,
       show_warnings: partial.thinking?.show_warnings ?? DEFAULT_THINKING_CONFIG.show_warnings,
     },
+    channels: normalizeOfficialChannelsConfig(
+      partial as Partial<UnifiedConfig> & { discord_channels?: LegacyDiscordChannelsConfig }
+    ),
     // Dashboard auth config - disabled by default
     dashboard_auth: {
       enabled: partial.dashboard_auth?.enabled ?? DEFAULT_DASHBOARD_AUTH_CONFIG.enabled,
@@ -758,6 +804,28 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push(
       yaml
         .dump({ thinking: config.thinking }, { indent: 2, lineWidth: -1, quotingType: '"' })
+        .trim()
+    );
+    lines.push('');
+  }
+
+  // Official Channels section
+  if (config.channels) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Official Channels: Runtime auto-enable for Anthropic official channel plugins');
+    lines.push('# Supported channels: telegram, discord, imessage');
+    lines.push('# Runtime-only: CCS injects --channels at launch for compatible Claude sessions.');
+    lines.push('# Bot tokens live in Claude channel env files, not in config.yaml.');
+    lines.push('# Use selected: [telegram, discord, imessage] to choose channels.');
+    lines.push(
+      '# unattended adds --dangerously-skip-permissions only when channel auto-enable is active.'
+    );
+    lines.push('# Compatible sessions: native Claude default/account profiles only.');
+    lines.push('# Configure via: ccs config channels or the Settings > Channels dashboard tab.');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml
+        .dump({ channels: config.channels }, { indent: 2, lineWidth: -1, quotingType: '"' })
         .trim()
     );
     lines.push('');
@@ -1136,6 +1204,37 @@ export function getThinkingConfig(): ThinkingConfig {
     provider_overrides: config.thinking?.provider_overrides,
     show_warnings: config.thinking?.show_warnings ?? DEFAULT_THINKING_CONFIG.show_warnings,
   };
+}
+
+/**
+ * Get Official Channels configuration.
+ * Returns defaults if not configured.
+ */
+export function getOfficialChannelsConfig(): OfficialChannelsConfig {
+  const config = loadOrCreateUnifiedConfig();
+
+  return {
+    selected:
+      config.channels?.selected && config.channels.selected.length > 0
+        ? normalizeOfficialChannelIds(config.channels.selected)
+        : DEFAULT_OFFICIAL_CHANNELS_CONFIG.selected,
+    unattended: config.channels?.unattended ?? DEFAULT_OFFICIAL_CHANNELS_CONFIG.unattended,
+  };
+}
+
+/**
+ * Get dashboard_auth configuration with ENV var override.
+ * Priority: ENV vars > config.yaml > defaults
+ */
+export function isDashboardAuthEnabled(): boolean {
+  const envEnabled = process.env.CCS_DASHBOARD_AUTH_ENABLED;
+
+  if (envEnabled !== undefined) {
+    return envEnabled === 'true' || envEnabled === '1';
+  }
+
+  const config = loadOrCreateUnifiedConfig();
+  return config.dashboard_auth?.enabled ?? false;
 }
 
 /**

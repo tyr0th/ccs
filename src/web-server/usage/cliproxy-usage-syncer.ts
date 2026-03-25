@@ -32,6 +32,8 @@ interface CliproxyUsageSnapshot {
   monthly: MonthlyUsage[];
 }
 
+type FetchCliproxyUsageRaw = typeof fetchCliproxyUsageRaw;
+
 const SNAPSHOT_VERSION = 1;
 
 /** Sync interval in ms, configurable via CCS_CLIPROXY_SYNC_INTERVAL env var (default: 5 min) */
@@ -106,8 +108,10 @@ export async function loadCachedCliproxyData(): Promise<{
  * Fetch latest CLIProxy usage data and persist a snapshot to disk.
  * Non-fatal: logs warning and returns early if CLIProxy is unavailable.
  */
-export async function syncCliproxyUsage(): Promise<void> {
-  const raw = await fetchCliproxyUsageRaw();
+export async function syncCliproxyUsage(
+  fetchRaw: FetchCliproxyUsageRaw = fetchCliproxyUsageRaw
+): Promise<void> {
+  const raw = await fetchRaw();
 
   if (raw === null) {
     console.log(warn('CLIProxy usage sync skipped: proxy unavailable'));
@@ -150,7 +154,7 @@ export async function syncCliproxyUsage(): Promise<void> {
  * Start periodic CLIProxy usage sync (every 5 minutes).
  * Performs an immediate sync on startup.
  */
-export function startCliproxySync(): void {
+export function startCliproxySync(syncNow: () => Promise<void> = () => syncCliproxyUsage()): void {
   if (syncIntervalId !== null) {
     return;
   }
@@ -159,10 +163,10 @@ export function startCliproxySync(): void {
   console.log(info(`Starting CLIProxy usage sync (interval: ${intervalMin} min)`));
 
   // Fire-and-forget initial sync
-  void syncCliproxyUsage();
+  void syncNow();
 
   syncIntervalId = setInterval(() => {
-    void syncCliproxyUsage();
+    void syncNow();
   }, SYNC_INTERVAL_MS);
 }
 

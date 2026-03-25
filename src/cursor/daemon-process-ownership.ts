@@ -3,14 +3,30 @@ import * as fs from 'fs';
 
 export type DaemonOwnershipStatus = 'owned' | 'not-owned' | 'not-running' | 'unknown';
 
+function sleepSync(milliseconds: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
 function getProcessCommandLine(pid: number): string | null {
   if (process.platform === 'linux') {
-    try {
-      // /proc cmdline uses null separators between arguments.
-      return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ').trim();
-    } catch {
-      return null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        // /proc cmdline uses null separators between arguments.
+        const commandLine = fs
+          .readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+          .replace(/\0/g, ' ')
+          .trim();
+        if (commandLine) {
+          return commandLine;
+        }
+      } catch {
+        return null;
+      }
+
+      sleepSync(25);
     }
+
+    return null;
   }
 
   if (process.platform === 'darwin') {

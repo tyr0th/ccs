@@ -180,14 +180,11 @@ export function getCliInstallHints(): string[] {
   ];
 }
 
-/**
- * Get WebSearch readiness status for display.
- */
-export function getWebSearchReadiness(): WebSearchStatus {
-  const wsConfig = getWebSearchConfig();
-  const providers = getWebSearchCliProviders();
-
-  if (!wsConfig.enabled) {
+export function buildWebSearchReadiness(
+  enabled: boolean,
+  providers: WebSearchCliInfo[]
+): WebSearchStatus {
+  if (!enabled) {
     return {
       readiness: 'unavailable',
       message: 'Disabled in config',
@@ -221,6 +218,15 @@ export function getWebSearchReadiness(): WebSearchStatus {
     message: 'Enable at least one provider in Settings > WebSearch',
     providers,
   };
+}
+
+/**
+ * Get WebSearch readiness status for display.
+ */
+export function getWebSearchReadiness(): WebSearchStatus {
+  const wsConfig = getWebSearchConfig();
+  const providers = getWebSearchCliProviders();
+  return buildWebSearchReadiness(wsConfig.enabled, providers);
 }
 
 /**

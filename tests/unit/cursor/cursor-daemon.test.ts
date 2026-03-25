@@ -49,6 +49,27 @@ afterEach(() => {
 // Use getCcsDir() for consistent path resolution with production code
 const getTestCursorDir = () => path.join(getCcsDir(), 'cursor');
 
+async function waitForProcessReady(pid: number): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      process.kill(pid, 0);
+
+      if (process.platform !== 'linux') {
+        return;
+      }
+
+      const commandLine = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, '').trim();
+      if (commandLine.length > 0) {
+        return;
+      }
+    } catch {
+      // Process is still starting up.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 describe('getPidFromFile', () => {
   it('returns null when no PID file exists', () => {
     expect(getPidFromFile()).toBeNull();
@@ -230,6 +251,7 @@ describe('stopDaemon', () => {
       throw new Error('Failed to spawn unrelated process');
     }
 
+    await waitForProcessReady(unrelatedPid);
     writePidToFile(unrelatedPid);
 
     try {

@@ -9,15 +9,31 @@ import {
   importApiProfileBundle,
   registerApiProfileOrphans,
 } from '../../../src/api/services/profile-lifecycle-service';
+import { runWithScopedConfigDir, setGlobalConfigDir } from '../../../src/utils/config-manager';
 
 describe('profile lifecycle service', () => {
   let tempHome = '';
   let originalCcsHome: string | undefined;
+  let originalCcsDir: string | undefined;
+  let originalUnifiedMode: string | undefined;
+
+  function getScopedCcsDir(): string {
+    return path.join(tempHome, '.ccs');
+  }
+
+  async function runInScopedCcsDir<T>(fn: () => T): Promise<T> {
+    return await runWithScopedConfigDir(getScopedCcsDir(), fn);
+  }
 
   beforeEach(() => {
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-profile-lifecycle-'));
     originalCcsHome = process.env.CCS_HOME;
+    originalCcsDir = process.env.CCS_DIR;
+    originalUnifiedMode = process.env.CCS_UNIFIED_CONFIG;
     process.env.CCS_HOME = tempHome;
+    delete process.env.CCS_DIR;
+    delete process.env.CCS_UNIFIED_CONFIG;
+    setGlobalConfigDir(undefined);
   });
 
   afterEach(() => {
@@ -27,12 +43,26 @@ describe('profile lifecycle service', () => {
       process.env.CCS_HOME = originalCcsHome;
     }
 
+    if (originalCcsDir === undefined) {
+      delete process.env.CCS_DIR;
+    } else {
+      process.env.CCS_DIR = originalCcsDir;
+    }
+
+    if (originalUnifiedMode === undefined) {
+      delete process.env.CCS_UNIFIED_CONFIG;
+    } else {
+      process.env.CCS_UNIFIED_CONFIG = originalUnifiedMode;
+    }
+
+    setGlobalConfigDir(undefined);
+
     if (tempHome && fs.existsSync(tempHome)) {
       fs.rmSync(tempHome, { recursive: true, force: true });
     }
   });
 
-  it('discovers only API profile orphans (skips registered and reserved names)', () => {
+  it('discovers only API profile orphans (skips registered and reserved names)', async () => {
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });
 
@@ -43,41 +73,56 @@ describe('profile lifecycle service', () => {
 
     fs.writeFileSync(
       path.join(ccsDir, 'glm.settings.json'),
-      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } }, null, 2) +
-        '\n'
+      JSON.stringify(
+        { env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } },
+        null,
+        2
+      ) + '\n'
     );
     fs.writeFileSync(
       path.join(ccsDir, 'extra.settings.json'),
-      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } }, null, 2) +
-        '\n'
+      JSON.stringify(
+        { env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } },
+        null,
+        2
+      ) + '\n'
     );
     fs.writeFileSync(
       path.join(ccsDir, 'gemini.settings.json'),
-      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } }, null, 2) +
-        '\n'
+      JSON.stringify(
+        { env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } },
+        null,
+        2
+      ) + '\n'
     );
 
-    const result = discoverApiProfileOrphans();
+    const result = await runInScopedCcsDir(() => discoverApiProfileOrphans());
     expect(result.orphans.map((orphan) => orphan.name)).toEqual(['extra']);
   });
 
-  it('treats explicit empty names list as no-op during orphan registration', () => {
+  it('treats explicit empty names list as no-op during orphan registration', async () => {
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });
 
     fs.writeFileSync(
       path.join(ccsDir, 'lonely.settings.json'),
-      JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } }, null, 2) +
-        '\n'
+      JSON.stringify(
+        { env: { ANTHROPIC_BASE_URL: 'https://api.example.com', ANTHROPIC_AUTH_TOKEN: 'token' } },
+        null,
+        2
+      ) + '\n'
     );
-    fs.writeFileSync(path.join(ccsDir, 'config.json'), JSON.stringify({ profiles: {} }, null, 2) + '\n');
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.json'),
+      JSON.stringify({ profiles: {} }, null, 2) + '\n'
+    );
 
-    const result = registerApiProfileOrphans({ names: [] });
+    const result = await runInScopedCcsDir(() => registerApiProfileOrphans({ names: [] }));
     expect(result.registered).toEqual([]);
     expect(result.skipped).toEqual([]);
   });
 
-  it('redacts all sensitive env values during export when includeSecrets=false', () => {
+  it('redacts all sensitive env values during export when includeSecrets=false', async () => {
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });
 
@@ -100,7 +145,7 @@ describe('profile lifecycle service', () => {
       ) + '\n'
     );
 
-    const result = exportApiProfile('glm', false);
+    const result = await runInScopedCcsDir(() => exportApiProfile('glm', false));
     expect(result.success).toBe(true);
     expect(result.bundle?.settings).toBeDefined();
 
@@ -109,46 +154,53 @@ describe('profile lifecycle service', () => {
     expect(env.OPENROUTER_API_KEY).toBe('__CCS_REDACTED__');
   });
 
-  it('rejects invalid source profile names in copy flow', () => {
-    const result = copyApiProfile('../escape', 'safe-name');
+  it('rejects invalid source profile names in copy flow', async () => {
+    const result = await runInScopedCcsDir(() => copyApiProfile('../escape', 'safe-name'));
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid source profile name');
   });
 
-  it('rejects import bundle with invalid profile target', () => {
-    const result = importApiProfileBundle({
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      profile: { name: 'glm', target: 'invalid-target' },
-      settings: {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://api.example.com',
-          ANTHROPIC_AUTH_TOKEN: 'token',
+  it('rejects import bundle with invalid profile target', async () => {
+    const result = await runInScopedCcsDir(() =>
+      importApiProfileBundle({
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        profile: { name: 'glm', target: 'invalid-target' },
+        settings: {
+          env: {
+            ANTHROPIC_BASE_URL: 'https://api.example.com',
+            ANTHROPIC_AUTH_TOKEN: 'token',
+          },
         },
-      },
-    });
+      })
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid bundle profile target');
   });
 
-  it('clears and warns for all redacted sensitive env keys on import', () => {
+  it('clears and warns for all redacted sensitive env keys on import', async () => {
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });
-    fs.writeFileSync(path.join(ccsDir, 'config.json'), JSON.stringify({ profiles: {} }, null, 2) + '\n');
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.json'),
+      JSON.stringify({ profiles: {} }, null, 2) + '\n'
+    );
 
-    const result = importApiProfileBundle({
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      profile: { name: 'redacted-import', target: 'claude' },
-      settings: {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://api.example.com',
-          ANTHROPIC_AUTH_TOKEN: '__CCS_REDACTED__',
-          OPENROUTER_API_KEY: '__CCS_REDACTED__',
+    const result = await runInScopedCcsDir(() =>
+      importApiProfileBundle({
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        profile: { name: 'redacted-import', target: 'claude' },
+        settings: {
+          env: {
+            ANTHROPIC_BASE_URL: 'https://api.example.com',
+            ANTHROPIC_AUTH_TOKEN: '__CCS_REDACTED__',
+            OPENROUTER_API_KEY: '__CCS_REDACTED__',
+          },
         },
-      },
-    });
+      })
+    );
 
     expect(result.success).toBe(true);
     expect(result.warnings?.length).toBeGreaterThan(0);

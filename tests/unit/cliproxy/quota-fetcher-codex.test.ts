@@ -8,16 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  buildCodexQuotaWindows,
-  buildCodexCoreUsageSummary,
-  fetchCodexQuota,
-  getUnknownCodexWindowLabels,
-} from '../../../src/cliproxy/quota-fetcher-codex';
 
 let tmpDir: string;
 let originalCcsHome: string | undefined;
 let originalFetch: typeof fetch;
+let moduleVersion = 0;
+let buildCodexQuotaWindows: typeof import('../../../src/cliproxy/quota-fetcher-codex').buildCodexQuotaWindows;
+let buildCodexCoreUsageSummary: typeof import('../../../src/cliproxy/quota-fetcher-codex').buildCodexCoreUsageSummary;
+let fetchCodexQuota: typeof import('../../../src/cliproxy/quota-fetcher-codex').fetchCodexQuota;
+let getUnknownCodexWindowLabels: typeof import('../../../src/cliproxy/quota-fetcher-codex').getUnknownCodexWindowLabels;
 
 function createCodexAccount(
   accountId: string,
@@ -29,7 +28,26 @@ function createCodexAccount(
   fs.writeFileSync(path.join(authDir, tokenFile), JSON.stringify(tokenPayload));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  moduleVersion += 1;
+  mock.restore();
+
+  const configGenerator = await import(
+    `../../../src/cliproxy/config-generator?codex-config-generator=${moduleVersion}`
+  );
+  const accountManager = await import(
+    `../../../src/cliproxy/account-manager?codex-account-manager=${moduleVersion}`
+  );
+  mock.module('../../../src/cliproxy/config-generator', () => configGenerator);
+  mock.module('../../../src/cliproxy/account-manager', () => accountManager);
+
+  ({
+    buildCodexQuotaWindows,
+    buildCodexCoreUsageSummary,
+    fetchCodexQuota,
+    getUnknownCodexWindowLabels,
+  } = await import(`../../../src/cliproxy/quota-fetcher-codex?codex-fetcher=${moduleVersion}`));
+
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-codex-quota-test-'));
   originalCcsHome = process.env.CCS_HOME;
   process.env.CCS_HOME = tmpDir;
@@ -37,6 +55,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mock.restore();
   global.fetch = originalFetch;
   if (originalCcsHome !== undefined) {
     process.env.CCS_HOME = originalCcsHome;

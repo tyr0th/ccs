@@ -6,7 +6,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
-import { getDashboardAuthConfig } from '../../config/unified-config-loader';
+import { getDashboardAuthConfig, isDashboardAuthEnabled } from '../../config/unified-config-loader';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -78,7 +78,7 @@ export const loginRateLimiter = rateLimit({
   message: { error: 'Too many login attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: () => !getDashboardAuthConfig().enabled,
+  skip: () => !isDashboardAuthEnabled(),
 });
 
 /**
@@ -106,10 +106,8 @@ export function createSessionMiddleware() {
  * Only active when dashboard_auth.enabled = true.
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const authConfig = getDashboardAuthConfig();
-
   // Skip auth if disabled
-  if (!authConfig.enabled) {
+  if (!isDashboardAuthEnabled()) {
     return next();
   }
 
@@ -150,7 +148,7 @@ export function requireLocalAccessWhenAuthDisabled(
   res: Response,
   error = 'This endpoint requires localhost access when dashboard auth is disabled.'
 ): boolean {
-  if (getDashboardAuthConfig().enabled) {
+  if (isDashboardAuthEnabled()) {
     return true;
   }
 

@@ -8,20 +8,19 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import {
-  buildGeminiCliBuckets,
-  resolveGeminiCliProjectId,
-} from '../../../src/cliproxy/quota-fetcher-gemini-cli';
-import { refreshGeminiToken } from '../../../src/cliproxy/auth/gemini-token-refresh';
-import { getProviderAuthDir } from '../../../src/cliproxy/config-generator';
 import { getCapturedFetchRequests, mockFetch, restoreFetch } from '../../mocks';
 
 describe('Gemini CLI Quota Fetcher', () => {
   let tempHome: string;
-  let originalHome: string | undefined;
   let originalCcsHome: string | undefined;
+  let originalCcsDir: string | undefined;
   let originalGeminiClientId: string | undefined;
   let originalGeminiClientSecret: string | undefined;
+  let moduleVersion = 0;
+  let buildGeminiCliBuckets: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').buildGeminiCliBuckets;
+  let resolveGeminiCliProjectId: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').resolveGeminiCliProjectId;
+  let refreshGeminiToken: typeof import('../../../src/cliproxy/auth/gemini-token-refresh').refreshGeminiToken;
+  let getProviderAuthDir: typeof import('../../../src/cliproxy/config-generator').getProviderAuthDir;
 
   function writeGeminiToken(token: Record<string, unknown>): string {
     const authDir = getProviderAuthDir('gemini');
@@ -31,33 +30,45 @@ describe('Gemini CLI Quota Fetcher', () => {
     return tokenPath;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    moduleVersion += 1;
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-gemini-refresh-'));
-    originalHome = process.env.HOME;
     originalCcsHome = process.env.CCS_HOME;
+    originalCcsDir = process.env.CCS_DIR;
     originalGeminiClientId = process.env.CCS_GEMINI_OAUTH_CLIENT_ID;
     originalGeminiClientSecret = process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET;
-
-    process.env.HOME = tempHome;
     process.env.CCS_HOME = tempHome;
+
     delete process.env.CCS_GEMINI_OAUTH_CLIENT_ID;
     delete process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET;
+    delete process.env.CCS_DIR;
+
+    const configGenerator = await import(
+      `../../../src/cliproxy/config-generator?gemini-config-generator=${moduleVersion}`
+    );
+    ({ buildGeminiCliBuckets, resolveGeminiCliProjectId } = await import(
+      `../../../src/cliproxy/quota-fetcher-gemini-cli?gemini-quota-fetcher=${moduleVersion}`
+    ));
+    ({ refreshGeminiToken } = await import(
+      `../../../src/cliproxy/auth/gemini-token-refresh?gemini-refresh=${moduleVersion}`
+    ));
+    ({ getProviderAuthDir } = configGenerator);
   });
 
   afterEach(() => {
     restoreFetch();
     fs.rmSync(tempHome, { recursive: true, force: true });
 
-    if (originalHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = originalHome;
-    }
-
     if (originalCcsHome === undefined) {
       delete process.env.CCS_HOME;
     } else {
       process.env.CCS_HOME = originalCcsHome;
+    }
+
+    if (originalCcsDir === undefined) {
+      delete process.env.CCS_DIR;
+    } else {
+      process.env.CCS_DIR = originalCcsDir;
     }
 
     if (originalGeminiClientId === undefined) {

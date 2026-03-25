@@ -11,7 +11,8 @@ import * as path from 'path';
 import * as os from 'os';
 import ProfileContextSyncLock from './profile-context-sync-lock';
 import { ok, info, warn } from '../utils/ui';
-import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_GROUP } from '../auth/account-context';
+import { DEFAULT_ACCOUNT_CONTEXT_GROUP } from '../auth/account-context';
+import type { AccountContextPolicy } from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
 
 interface SharedItem {

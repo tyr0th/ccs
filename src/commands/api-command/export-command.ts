@@ -5,8 +5,29 @@ import { fail, initUI, ok, warn } from '../../utils/ui';
 import { extractOption, hasAnyFlag } from '../arg-extractor';
 import { collectUnexpectedApiArgs } from './shared';
 
-export async function handleApiExportCommand(args: string[]): Promise<void> {
-  await initUI();
+interface ApiExportCommandDependencies {
+  exportApiProfile: typeof exportApiProfile;
+  initUI: typeof initUI;
+  ok: typeof ok;
+  warn: typeof warn;
+  fail: typeof fail;
+  getCwd: () => string;
+}
+
+const defaultApiExportCommandDependencies: ApiExportCommandDependencies = {
+  exportApiProfile,
+  initUI,
+  ok,
+  warn,
+  fail,
+  getCwd: () => process.cwd(),
+};
+
+export async function handleApiExportCommand(
+  args: string[],
+  deps: ApiExportCommandDependencies = defaultApiExportCommandDependencies
+): Promise<void> {
+  await deps.initUI();
   const includeSecrets = hasAnyFlag(args, ['--include-secrets']);
 
   const outExtracted = extractOption(args, ['--out'], {
@@ -15,7 +36,7 @@ export async function handleApiExportCommand(args: string[]): Promise<void> {
     knownFlags: ['--out', '--include-secrets'],
   });
   if (outExtracted.found && (outExtracted.missingValue || !outExtracted.value)) {
-    console.log(fail('Missing value for --out'));
+    console.log(deps.fail('Missing value for --out'));
     process.exit(1);
   }
 
@@ -24,29 +45,29 @@ export async function handleApiExportCommand(args: string[]): Promise<void> {
     maxPositionals: 1,
   });
   if (syntax.errors.length > 0) {
-    syntax.errors.forEach((errorMessage) => console.log(fail(errorMessage)));
+    syntax.errors.forEach((errorMessage) => console.log(deps.fail(errorMessage)));
     process.exit(1);
   }
 
   const name = syntax.positionals[0];
   if (!name) {
-    console.log(fail('Profile name is required. Usage: ccs api export <name> [--out <file>]'));
+    console.log(deps.fail('Profile name is required. Usage: ccs api export <name> [--out <file>]'));
     process.exit(1);
   }
 
-  const result = exportApiProfile(name, includeSecrets);
+  const result = deps.exportApiProfile(name, includeSecrets);
   if (!result.success || !result.bundle) {
-    console.log(fail(result.error || 'Failed to export profile'));
+    console.log(deps.fail(result.error || 'Failed to export profile'));
     process.exit(1);
   }
 
-  const outputPath = path.resolve(outExtracted.value || `${name}.ccs-profile.json`);
+  const outputPath = path.resolve(deps.getCwd(), outExtracted.value || `${name}.ccs-profile.json`);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(result.bundle, null, 2) + '\n', 'utf8');
 
-  console.log(ok(`Profile exported to: ${outputPath}`));
+  console.log(deps.ok(`Profile exported to: ${outputPath}`));
   if (result.redacted) {
-    console.log(warn('Token was redacted in export. Use --include-secrets to include it.'));
+    console.log(deps.warn('Token was redacted in export. Use --include-secrets to include it.'));
   }
   console.log('');
 }

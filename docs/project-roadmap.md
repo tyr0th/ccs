@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-03-23
+Last Updated: 2026-03-24
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -41,6 +41,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-03-24**: Official Claude Channels now follow Anthropic's actual runtime contract. CCS blocks auto-enable unless Bun is available, Claude Code is verified at v2.1.80+, and `claude.ai` auth is verified; treats `--allow-dangerously-skip-permissions` as an explicit override; keeps Telegram/Discord bot tokens in Claude's shared `~/.claude/channels/` state (or official `*_STATE_DIR` overrides); and upgrades the dashboard/CLI status flow with Bun/version/auth/state-scope guidance, safer token draft retention on refresh failures, and a non-macOS iMessage toggle that can still be turned off when already selected.
 - **2026-03-23**: CLIProxy providers that do not expose an email no longer require a user-supplied nickname on first auth. CCS now derives a stable internal account identifier for Kiro/Copilot-style flows, preserves later rename support, hardens account discovery/registry sync around that identifier, and updates AI Provider CRUD to use stable entry IDs instead of dashboard list indexes.
 - **2026-03-23**: Sensitive dashboard management routes now fail closed to localhost-only access whenever dashboard auth is disabled. Remote access remains available after `ccs config auth setup`, but AI Provider management, CLIProxy auth/status helpers, and other write-capable settings endpoints no longer trust unauthenticated non-loopback requests.
 - **2026-03-19**: **#649** CCS splits CLIProxy provider-key authoring into a dedicated `CLIProxy -> AI Providers` dashboard route. `/cliproxy` now stays focused on OAuth accounts and variants, `/cliproxy/ai-providers` owns Gemini/Codex/Claude/Vertex/OpenAI-compatible key management, and `/providers` stays reserved for CCS-native API Profiles.

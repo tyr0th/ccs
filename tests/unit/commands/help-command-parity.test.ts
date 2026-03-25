@@ -84,4 +84,23 @@ describe('help command parity', () => {
     expect(rendered.includes('ccs config --host 0.0.0.0')).toBe(true);
     expect(rendered.includes('Force all-interface binding for remote devices')).toBe(true);
   });
+
+  test('root help documents official channels native-only scope and process-env tokens', async () => {
+    const lines: string[] = [];
+    console.log = (...args: unknown[]) => {
+      lines.push(args.map((arg) => String(arg)).join(' '));
+    };
+
+    await handleHelpCommand();
+
+    const rendered = stripAnsi(lines.join('\n'));
+    expect(rendered.includes('Dashboard -> Settings -> Channels (fastest path)')).toBe(true);
+    expect(
+      rendered.includes('Fastest path: turn on the channel, save the token if needed, then run ccs.')
+    ).toBe(true);
+    expect(rendered.includes('Not supported for ccs glm')).toBe(true);
+    expect(rendered.includes('Current-process TELEGRAM_BOT_TOKEN / DISCORD_BOT_TOKEN also work')).toBe(
+      true
+    );
+  });
 });

@@ -350,24 +350,6 @@ export default function WebSearchSection() {
     fetchRawConfig();
   }, [fetchConfig, fetchStatus, fetchRawConfig]);
 
-  useEffect(() => {
-    if (!config?.providers) {
-      return;
-    }
-
-    const nextDrafts: Record<string, string> = {};
-    for (const provider of [...BACKEND_PROVIDERS, ...LEGACY_PROVIDERS]) {
-      for (const field of provider.fields ?? []) {
-        nextDrafts[`${provider.id}.${field.key}`] = getConfiguredValue(
-          config.providers,
-          provider.id,
-          field
-        );
-      }
-    }
-    setFieldDrafts(nextDrafts);
-  }, [config]);
-
   const providerStatus = useMemo(
     () => new Map((status?.providers ?? []).map((provider) => [provider.id, provider])),
     [status?.providers]
@@ -410,7 +392,10 @@ export default function WebSearchSection() {
     const currentProviders = (config.providers ?? {}) as WebSearchProvidersConfig;
     const currentProviderConfig = currentProviders[providerId] ?? {};
     const currentValue = currentProviderConfig[field.key] ?? field.defaultValue;
-    const normalized = normalizeFieldValue(field, fieldDrafts[fieldId] ?? String(currentValue));
+    const normalized = normalizeFieldValue(
+      field,
+      fieldDrafts[fieldId] ?? getConfiguredValue(currentProviders, providerId, field)
+    );
 
     setFieldDrafts((current) => ({ ...current, [fieldId]: String(normalized) }));
 
@@ -443,7 +428,13 @@ export default function WebSearchSection() {
       return {
         id: fieldId,
         label: field.label,
-        value: fieldDrafts[fieldId] ?? String(field.defaultValue),
+        value:
+          fieldDrafts[fieldId] ??
+          getConfiguredValue(
+            (config?.providers ?? {}) as WebSearchProvidersConfig,
+            provider.id,
+            field
+          ),
         placeholder: field.placeholder,
         type: field.type,
         helpText: field.helpText,

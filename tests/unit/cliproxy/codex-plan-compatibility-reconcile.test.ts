@@ -42,38 +42,36 @@ async function importCompatibilityModule(cacheTag: string) {
   return import(`../../../src/cliproxy/codex-plan-compatibility?${cacheTag}=${Date.now()}`);
 }
 
+const identity = (message: string) => message;
+
 describe('codex plan compatibility reconcile', () => {
   it('repairs stale paid-only Codex settings for free-plan accounts before launch', async () => {
     const { tmpDir, settingsPath } = createCodexSettingsFixture('gpt-5.3-codex-spark');
-
-    mock.module('../../../src/cliproxy/account-manager', () => ({
-      getDefaultAccount: () => ({ id: 'free@example.com' }),
-    }));
-    mock.module('../../../src/cliproxy/quota-fetcher-codex', () => ({
-      fetchCodexQuota: async () => ({
-        success: true,
-        windows: [],
-        coreUsage: { fiveHour: null, weekly: null },
-        planType: 'free',
-        lastUpdated: Date.now(),
-        accountId: 'free@example.com',
-      }),
-    }));
-    mock.module('../../../src/utils/ui', () => ({
-      info: (message: string) => message,
-      warn: (message: string) => message,
-    }));
-
     const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
     try {
       const { reconcileCodexModelForActivePlan } = await importCompatibilityModule('free-plan');
 
-      await reconcileCodexModelForActivePlan({
-        settingsPath,
-        currentModel: 'gpt-5.3-codex',
-        verbose: false,
-      });
+      await reconcileCodexModelForActivePlan(
+        {
+          settingsPath,
+          currentModel: 'gpt-5.3-codex',
+          verbose: false,
+        },
+        {
+          getDefaultAccount: () => ({ id: 'free@example.com' }) as never,
+          fetchCodexQuota: async () => ({
+            success: true,
+            windows: [],
+            coreUsage: { fiveHour: null, weekly: null },
+            planType: 'free',
+            lastUpdated: Date.now(),
+            accountId: 'free@example.com',
+          }),
+          formatInfo: identity,
+          formatWarn: identity,
+        }
+      );
 
       const repaired = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
         env: Record<string, string>;
@@ -92,31 +90,27 @@ describe('codex plan compatibility reconcile', () => {
 
   it('warns and leaves settings untouched when no default Codex account is available', async () => {
     const { tmpDir, settingsPath } = createCodexSettingsFixture();
-
-    mock.module('../../../src/cliproxy/account-manager', () => ({
-      getDefaultAccount: () => null,
-    }));
-    mock.module('../../../src/cliproxy/quota-fetcher-codex', () => ({
-      fetchCodexQuota: async () => {
-        throw new Error('should not fetch quota without a default account');
-      },
-    }));
-    mock.module('../../../src/utils/ui', () => ({
-      info: (message: string) => message,
-      warn: (message: string) => message,
-    }));
-
     const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
     try {
       const { reconcileCodexModelForActivePlan } =
         await importCompatibilityModule('missing-default-account');
 
-      await reconcileCodexModelForActivePlan({
-        settingsPath,
-        currentModel: 'gpt-5.3-codex',
-        verbose: false,
-      });
+      await reconcileCodexModelForActivePlan(
+        {
+          settingsPath,
+          currentModel: 'gpt-5.3-codex',
+          verbose: false,
+        },
+        {
+          getDefaultAccount: () => null,
+          fetchCodexQuota: async () => {
+            throw new Error('should not fetch quota without a default account');
+          },
+          formatInfo: identity,
+          formatWarn: identity,
+        }
+      );
 
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
         env: Record<string, string>;
@@ -133,35 +127,31 @@ describe('codex plan compatibility reconcile', () => {
   it('keeps paid-plan Codex settings unchanged for plus and team accounts', async () => {
     for (const planType of ['plus', 'team'] as const) {
       const { tmpDir, settingsPath } = createCodexSettingsFixture();
-
-      mock.module('../../../src/cliproxy/account-manager', () => ({
-        getDefaultAccount: () => ({ id: `${planType}@example.com` }),
-      }));
-      mock.module('../../../src/cliproxy/quota-fetcher-codex', () => ({
-        fetchCodexQuota: async () => ({
-          success: true,
-          windows: [],
-          coreUsage: { fiveHour: null, weekly: null },
-          planType,
-          lastUpdated: Date.now(),
-          accountId: `${planType}@example.com`,
-        }),
-      }));
-      mock.module('../../../src/utils/ui', () => ({
-        info: (message: string) => message,
-        warn: (message: string) => message,
-      }));
-
       const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
       try {
         const { reconcileCodexModelForActivePlan } = await importCompatibilityModule(planType);
 
-        await reconcileCodexModelForActivePlan({
-          settingsPath,
-          currentModel: 'gpt-5.3-codex',
-          verbose: false,
-        });
+        await reconcileCodexModelForActivePlan(
+          {
+            settingsPath,
+            currentModel: 'gpt-5.3-codex',
+            verbose: false,
+          },
+          {
+            getDefaultAccount: () => ({ id: `${planType}@example.com` }) as never,
+            fetchCodexQuota: async () => ({
+              success: true,
+              windows: [],
+              coreUsage: { fiveHour: null, weekly: null },
+              planType,
+              lastUpdated: Date.now(),
+              accountId: `${planType}@example.com`,
+            }),
+            formatInfo: identity,
+            formatWarn: identity,
+          }
+        );
 
         const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
           env: Record<string, string>;
@@ -177,36 +167,32 @@ describe('codex plan compatibility reconcile', () => {
 
   it('warns and keeps settings unchanged when Codex plan verification fails', async () => {
     const { tmpDir, settingsPath } = createCodexSettingsFixture();
-
-    mock.module('../../../src/cliproxy/account-manager', () => ({
-      getDefaultAccount: () => ({ id: 'unknown@example.com' }),
-    }));
-    mock.module('../../../src/cliproxy/quota-fetcher-codex', () => ({
-      fetchCodexQuota: async () => ({
-        success: false,
-        windows: [],
-        coreUsage: { fiveHour: null, weekly: null },
-        planType: null,
-        lastUpdated: Date.now(),
-        accountId: 'unknown@example.com',
-        error: 'network timeout',
-      }),
-    }));
-    mock.module('../../../src/utils/ui', () => ({
-      info: (message: string) => message,
-      warn: (message: string) => message,
-    }));
-
     const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
     try {
       const { reconcileCodexModelForActivePlan } = await importCompatibilityModule('unknown-plan');
 
-      await reconcileCodexModelForActivePlan({
-        settingsPath,
-        currentModel: 'gpt-5.3-codex',
-        verbose: false,
-      });
+      await reconcileCodexModelForActivePlan(
+        {
+          settingsPath,
+          currentModel: 'gpt-5.3-codex',
+          verbose: false,
+        },
+        {
+          getDefaultAccount: () => ({ id: 'unknown@example.com' }) as never,
+          fetchCodexQuota: async () => ({
+            success: false,
+            windows: [],
+            coreUsage: { fiveHour: null, weekly: null },
+            planType: null,
+            lastUpdated: Date.now(),
+            accountId: 'unknown@example.com',
+            error: 'network timeout',
+          }),
+          formatInfo: identity,
+          formatWarn: identity,
+        }
+      );
 
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
         env: Record<string, string>;
@@ -222,36 +208,32 @@ describe('codex plan compatibility reconcile', () => {
 
   it('warns and keeps settings unchanged when quota succeeds without a plan type', async () => {
     const { tmpDir, settingsPath } = createCodexSettingsFixture();
-
-    mock.module('../../../src/cliproxy/account-manager', () => ({
-      getDefaultAccount: () => ({ id: 'missing-plan@example.com' }),
-    }));
-    mock.module('../../../src/cliproxy/quota-fetcher-codex', () => ({
-      fetchCodexQuota: async () => ({
-        success: true,
-        windows: [],
-        coreUsage: { fiveHour: null, weekly: null },
-        planType: null,
-        lastUpdated: Date.now(),
-        accountId: 'missing-plan@example.com',
-      }),
-    }));
-    mock.module('../../../src/utils/ui', () => ({
-      info: (message: string) => message,
-      warn: (message: string) => message,
-    }));
-
     const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
 
     try {
       const { reconcileCodexModelForActivePlan } =
         await importCompatibilityModule('missing-plan-type');
 
-      await reconcileCodexModelForActivePlan({
-        settingsPath,
-        currentModel: 'gpt-5.3-codex',
-        verbose: false,
-      });
+      await reconcileCodexModelForActivePlan(
+        {
+          settingsPath,
+          currentModel: 'gpt-5.3-codex',
+          verbose: false,
+        },
+        {
+          getDefaultAccount: () => ({ id: 'missing-plan@example.com' }) as never,
+          fetchCodexQuota: async () => ({
+            success: true,
+            windows: [],
+            coreUsage: { fiveHour: null, weekly: null },
+            planType: null,
+            lastUpdated: Date.now(),
+            accountId: 'missing-plan@example.com',
+          }),
+          formatInfo: identity,
+          formatWarn: identity,
+        }
+      );
 
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
         env: Record<string, string>;

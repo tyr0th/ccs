@@ -15,6 +15,7 @@ import healthRoutes from './health-routes';
 import providerRoutes from './provider-routes';
 import variantRoutes from './variant-routes';
 import settingsRoutes from './settings-routes';
+import channelsRoutes from './channels-routes';
 import websearchRoutes from './websearch-routes';
 import cliproxyAuthRoutes from './cliproxy-auth-routes';
 import cliproxyStatsRoutes from './cliproxy-stats-routes';
@@ -37,6 +38,7 @@ export const apiRoutes = Router();
 // Profile CRUD, settings management, presets, accounts
 apiRoutes.use('/profiles', profileRoutes);
 apiRoutes.use('/settings', settingsRoutes);
+apiRoutes.use('/channels', channelsRoutes);
 apiRoutes.use('/accounts', accountRoutes);
 
 // ==================== Unified Config ====================

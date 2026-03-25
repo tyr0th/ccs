@@ -25,6 +25,13 @@ import { parseConfigCommandArgs, showConfigCommandHelp } from './config-command-
 
 const CONFIG_SUBCOMMAND_ROUTES: readonly NamedCommandRoute[] = [
   {
+    name: 'channels',
+    handle: async (args) => {
+      const { handleConfigChannelsCommand } = await import('./config-channels-command');
+      await handleConfigChannelsCommand(args);
+    },
+  },
+  {
     name: 'auth',
     handle: async (args) => {
       const { handleConfigAuthCommand } = await import('./config-auth');
@@ -47,25 +54,62 @@ const CONFIG_SUBCOMMAND_ROUTES: readonly NamedCommandRoute[] = [
   },
 ];
 
+interface ConfigCommandDependencies {
+  getPort: typeof getPort;
+  openBrowser: typeof open;
+  startServer: typeof startServer;
+  setupGracefulShutdown: typeof setupGracefulShutdown;
+  ensureCliproxyService: typeof ensureCliproxyService;
+  getDashboardAuthConfig: typeof getDashboardAuthConfig;
+  initUI: typeof initUI;
+  header: typeof header;
+  ok: typeof ok;
+  info: typeof info;
+  warn: typeof warn;
+  fail: typeof fail;
+  resolveNamedCommand: typeof resolveNamedCommand;
+  configSubcommandRoutes: readonly NamedCommandRoute[];
+}
+
+const defaultConfigCommandDependencies: ConfigCommandDependencies = {
+  getPort,
+  openBrowser: open,
+  startServer,
+  setupGracefulShutdown,
+  ensureCliproxyService,
+  getDashboardAuthConfig,
+  initUI,
+  header,
+  ok,
+  info,
+  warn,
+  fail,
+  resolveNamedCommand,
+  configSubcommandRoutes: CONFIG_SUBCOMMAND_ROUTES,
+};
+
 /**
  * Handle config command
  */
-export async function handleConfigCommand(args: string[]): Promise<void> {
+export async function handleConfigCommand(
+  args: string[],
+  deps: ConfigCommandDependencies = defaultConfigCommandDependencies
+): Promise<void> {
   if (args.length === 1 && args[0] === 'help') {
-    await initUI();
+    await deps.initUI();
     showConfigCommandHelp();
     process.exit(0);
   }
 
   const subcommand = args[0]?.startsWith('-')
     ? undefined
-    : resolveNamedCommand(args[0], CONFIG_SUBCOMMAND_ROUTES);
+    : deps.resolveNamedCommand(args[0], deps.configSubcommandRoutes);
   if (subcommand) {
     await subcommand.handle(args.slice(1));
     return;
   }
 
-  await initUI();
+  await deps.initUI();
 
   const parsed = parseConfigCommandArgs(args);
   if (parsed.help) {
@@ -73,41 +117,41 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
     process.exit(0);
   }
   if (parsed.error) {
-    console.error(fail(parsed.error));
+    console.error(deps.fail(parsed.error));
     process.exit(1);
   }
 
   const options = parsed.options;
   const verbose = options.dev;
 
-  console.log(header('CCS Config Dashboard'));
+  console.log(deps.header('CCS Config Dashboard'));
   console.log('');
 
   // Ensure CLIProxy service is running for dashboard features
-  console.log(info('Starting CLIProxy service...'));
-  const cliproxyResult = await ensureCliproxyService(CLIPROXY_DEFAULT_PORT, verbose);
+  console.log(deps.info('Starting CLIProxy service...'));
+  const cliproxyResult = await deps.ensureCliproxyService(CLIPROXY_DEFAULT_PORT, verbose);
 
   if (cliproxyResult.started) {
     if (cliproxyResult.alreadyRunning) {
-      console.log(ok(`CLIProxy already running on port ${cliproxyResult.port}`));
+      console.log(deps.ok(`CLIProxy already running on port ${cliproxyResult.port}`));
       if (cliproxyResult.configRegenerated) {
-        console.log(warn('Config updated - restart CLIProxy to apply changes'));
+        console.log(deps.warn('Config updated - restart CLIProxy to apply changes'));
       }
     } else {
-      console.log(ok(`CLIProxy started on port ${cliproxyResult.port}`));
+      console.log(deps.ok(`CLIProxy started on port ${cliproxyResult.port}`));
     }
   } else {
-    console.log(warn(`CLIProxy not available: ${cliproxyResult.error}`));
-    console.log(info('Dashboard will work but Control Panel/Stats may be limited'));
+    console.log(deps.warn(`CLIProxy not available: ${cliproxyResult.error}`));
+    console.log(deps.info('Dashboard will work but Control Panel/Stats may be limited'));
   }
   console.log('');
 
-  console.log(info('Starting dashboard server...'));
+  console.log(deps.info('Starting dashboard server...'));
 
   // Find available port
   const port =
     options.port ??
-    (await getPort({
+    (await deps.getPort({
       port: [3000, 3001, 3002, 8000, 8080],
     }));
 
@@ -121,60 +165,60 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
       serverOptions.host = normalizeDashboardHost(options.host);
     }
 
-    const { server, wss, cleanup } = await startServer(serverOptions);
+    const { server, wss, cleanup } = await deps.startServer(serverOptions);
 
     // Setup graceful shutdown
-    setupGracefulShutdown(server, wss, cleanup);
+    deps.setupGracefulShutdown(server, wss, cleanup);
 
     const urls = resolveDashboardUrls(resolveServerBindHost(server) ?? options.host, port);
     const shouldWarnAboutExposure = urls.bindHost ? !isLoopbackHost(urls.bindHost) : false;
 
     if (options.dev) {
-      console.log(ok(`Dev Server: ${urls.browserUrl}`));
+      console.log(deps.ok(`Dev Server: ${urls.browserUrl}`));
       console.log('');
-      console.log(info('HMR enabled - UI changes will hot-reload'));
+      console.log(deps.info('HMR enabled - UI changes will hot-reload'));
     } else {
-      console.log(ok(`Dashboard: ${urls.browserUrl}`));
+      console.log(deps.ok(`Dashboard: ${urls.browserUrl}`));
     }
 
     if (shouldWarnAboutExposure && urls.bindHost) {
-      console.log(info(`Bind host: ${urls.bindHost}`));
+      console.log(deps.info(`Bind host: ${urls.bindHost}`));
       if (urls.networkUrls?.length === 1) {
-        console.log(info(`Network URL: ${urls.networkUrls[0]}`));
+        console.log(deps.info(`Network URL: ${urls.networkUrls[0]}`));
       } else if (urls.networkUrls && urls.networkUrls.length > 1) {
-        console.log(info('Network URLs:'));
+        console.log(deps.info('Network URLs:'));
         for (const networkUrl of urls.networkUrls) {
-          console.log(info(`  ${networkUrl}`));
+          console.log(deps.info(`  ${networkUrl}`));
         }
       }
     }
 
     if (shouldWarnAboutExposure && urls.bindHost) {
-      const authConfig = getDashboardAuthConfig();
+      const authConfig = deps.getDashboardAuthConfig();
       console.log(
-        warn('Dashboard may be reachable from other devices that can connect to this machine.')
+        deps.warn('Dashboard may be reachable from other devices that can connect to this machine.')
       );
       if (!authConfig.enabled) {
-        console.log(info('Protect it before sharing: ccs config auth setup'));
+        console.log(deps.info('Protect it before sharing: ccs config auth setup'));
       }
       if (isWildcardHost(urls.bindHost) && !urls.networkUrls?.length) {
-        console.log(info('Use your machine IP or hostname from the other device.'));
+        console.log(deps.info('Use your machine IP or hostname from the other device.'));
       }
     }
     console.log('');
 
     // Open browser
     try {
-      await open(urls.browserUrl, { wait: false });
-      console.log(info('Browser opened automatically'));
+      await deps.openBrowser(urls.browserUrl, { wait: false });
+      console.log(deps.info('Browser opened automatically'));
     } catch {
-      console.log(info(`Open manually: ${urls.browserUrl}`));
+      console.log(deps.info(`Open manually: ${urls.browserUrl}`));
     }
 
     console.log('');
-    console.log(info('Press Ctrl+C to stop'));
+    console.log(deps.info('Press Ctrl+C to stop'));
   } catch (error) {
-    console.error(fail(`Failed to start server: ${(error as Error).message}`));
+    console.error(deps.fail(`Failed to start server: ${(error as Error).message}`));
     process.exit(1);
   }
 }

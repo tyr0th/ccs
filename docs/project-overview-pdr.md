@@ -1,6 +1,6 @@
 # CCS Product Development Requirements (PDR)
 
-Last Updated: 2026-03-19
+Last Updated: 2026-03-24
 
 ## Product Overview
 
@@ -8,7 +8,7 @@ Last Updated: 2026-03-19
 
 **Tagline**: The universal AI profile manager for Claude Code
 
-**Description**: CLI wrapper enabling seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, OpenRouter, Qwen, Kimi, DeepSeek) with a React-based dashboard for configuration management. Supports both local and remote CLIProxyAPI instances with hybrid quota management.
+**Description**: CLI wrapper enabling seamless switching between multiple Claude accounts and alternative AI providers (GLM, Gemini, Codex, OpenRouter, Qwen, Kimi, DeepSeek) with a React-based dashboard for configuration management. Supports both local and remote CLIProxyAPI instances, hybrid quota management, and official Claude channel runtime setup for Telegram, Discord, and iMessage.
 
 **Current Version**: v7.34.x (Image Analysis Hook + Performance Improvements)
 
@@ -37,6 +37,7 @@ CCS provides:
 5. **Visual Dashboard**: React SPA for configuration management
 6. **Automatic WebSearch**: Real backend fallback chain for third-party providers
 7. **Usage Analytics**: Token tracking, cost analysis, model breakdown
+8. **Official Claude Channels**: Runtime auto-enable plus dashboard token/config flow for Telegram, Discord, and macOS-only iMessage
 
 ---
 
@@ -129,6 +130,16 @@ CCS provides:
 - Security: single-quoted output, key sanitization, shell-specific escaping
 - Cross-platform compatibility (macOS, Linux, Windows)
 
+### FR-012: Official Claude Channels
+- Support Telegram, Discord, and iMessage selection via `ccs config channels` and the dashboard
+- Auto-inject `--channels` only for native Claude `default` and `account` sessions
+- Store Telegram/Discord bot tokens in Claude's own `~/.claude/channels/<channel>/.env` state or the official `*_STATE_DIR` override path when one is configured
+- Treat iMessage as macOS-only, tokenless, and dependent on Claude-side install plus OS permissions
+- Require Bun, Claude Code v2.1.80+, and verified `claude.ai` auth before runtime auto-enable
+- Keep `--dangerously-skip-permissions` optional and never add it when the user already made an explicit permission choice
+- Surface platform/auth/version/setup blockers clearly in both CLI and dashboard flows
+- Preserve dashboard token drafts when save/refresh fails, and let already-selected unsupported iMessage entries be turned off without allowing re-enable on unsupported platforms
+
 ---
 
 ## Non-Functional Requirements
@@ -172,11 +183,13 @@ CCS provides:
 - CLIProxyAPI binary (auto-managed)
 - Exa/Tavily/Brave API keys for higher-quality WebSearch
 - Gemini CLI for legacy WebSearch fallback
+- Bun plus Claude Code v2.1.80+ with `claude.ai` auth for Official Channels auto-enable
 
 ### TR-003: Configuration
 - YAML-based config (`~/.ccs/config.yaml`)
 - JSON settings per profile
 - Environment variable overrides
+- Official channel bot tokens stored in Claude-managed `~/.claude/channels/<channel>/.env`
 
 ---
 

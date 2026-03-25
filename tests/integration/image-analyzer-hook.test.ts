@@ -52,6 +52,7 @@ function invokeHook(env: Record<string, string> = {}): Promise<HookResult> {
     const child = spawn('node', [HOOK_PATH], {
       env: {
         ...process.env,
+        CCS_IMAGE_ANALYSIS_SKIP: '', // clear any inherited skip flag
         CCS_CLIPROXY_API_KEY: CLIPROXY_API_KEY,
         CCS_CLIPROXY_PORT: String(mockPort),
         CCS_IMAGE_ANALYSIS_ENABLED: '1',

@@ -37,6 +37,13 @@ export interface CodexUnsupportedModelError {
   type: string | null;
 }
 
+interface CodexPlanCompatibilityDeps {
+  getDefaultAccount?: typeof getDefaultAccount;
+  fetchCodexQuota?: typeof fetchCodexQuota;
+  formatInfo?: typeof info;
+  formatWarn?: typeof warn;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -131,21 +138,29 @@ export function resolveRuntimeCodexFallbackModel(options: {
   return null;
 }
 
-export async function reconcileCodexModelForActivePlan(options: {
-  settingsPath: string;
-  currentModel: string | undefined;
-  verbose: boolean;
-}): Promise<void> {
+export async function reconcileCodexModelForActivePlan(
+  options: {
+    settingsPath: string;
+    currentModel: string | undefined;
+    verbose: boolean;
+  },
+  deps: CodexPlanCompatibilityDeps = {}
+): Promise<void> {
   const { settingsPath, currentModel, verbose } = options;
   if (!currentModel) return;
 
   const fallbackModel = getFreePlanFallbackCodexModel(currentModel);
   if (!fallbackModel) return;
 
-  const defaultAccount = getDefaultAccount('codex');
+  const resolveDefaultAccount = deps.getDefaultAccount ?? getDefaultAccount;
+  const fetchQuota = deps.fetchCodexQuota ?? fetchCodexQuota;
+  const formatInfo = deps.formatInfo ?? info;
+  const formatWarn = deps.formatWarn ?? warn;
+
+  const defaultAccount = resolveDefaultAccount('codex');
   if (!defaultAccount) {
     console.error(
-      warn(
+      formatWarn(
         `Configured Codex model "${normalizeCodexModelId(currentModel)}" may require a paid Codex plan. ` +
           `If startup fails, switch to "${fallbackModel}" with "ccs codex --config".`
       )
@@ -154,7 +169,7 @@ export async function reconcileCodexModelForActivePlan(options: {
   }
 
   const cachedQuota = getCachedQuota<CodexQuotaResult>('codex', defaultAccount.id);
-  const quota = cachedQuota ?? (await fetchCodexQuota(defaultAccount.id, verbose));
+  const quota = cachedQuota ?? (await fetchQuota(defaultAccount.id, verbose));
   if (!cachedQuota) {
     setCachedQuota('codex', defaultAccount.id, quota);
   }
@@ -164,7 +179,7 @@ export async function reconcileCodexModelForActivePlan(options: {
       rewriteHaikuModel: (haikuModel) => getFreePlanFallbackCodexModel(haikuModel) ?? haikuModel,
     });
     console.error(
-      info(
+      formatInfo(
         `Codex free plan detected. Switched unsupported model "${normalizeCodexModelId(currentModel)}" ` +
           `to "${fallbackModel}".`
       )
@@ -177,7 +192,7 @@ export async function reconcileCodexModelForActivePlan(options: {
   }
 
   console.error(
-    warn(
+    formatWarn(
       `Could not verify Codex plan for model "${normalizeCodexModelId(currentModel)}". ` +
         `If startup fails with model_not_supported, switch to "${fallbackModel}" via "ccs codex --config".`
     )

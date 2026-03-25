@@ -1,5 +1,6 @@
 import { initUI, header, color, dim, info, errorBox } from './ui';
-import { ERROR_CODES, getErrorDocUrl, ErrorCode } from './error-codes';
+import { ERROR_CODES, getErrorDocUrl } from './error-codes';
+import type { ErrorCode } from './error-codes';
 import { getPortCheckCommand, getKillPidCommand } from './platform-commands';
 
 /**

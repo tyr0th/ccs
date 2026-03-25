@@ -32,6 +32,52 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+let bootstrappedTestHome;
+const originalHomedir = os.homedir;
+let homedirPatched = false;
+
+function getEffectiveTestHome() {
+  return process.env.CCS_HOME || process.env.HOME || process.env.USERPROFILE || bootstrappedTestHome || originalHomedir();
+}
+
+function patchHomedirForTests() {
+  if (homedirPatched) {
+    return;
+  }
+
+  os.homedir = () => getEffectiveTestHome();
+  homedirPatched = true;
+}
+
+function createIsolatedTestHome(prefix = 'ccs-test-home-') {
+  const testHome = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.mkdirSync(path.join(testHome, '.ccs'), { recursive: true });
+  fs.mkdirSync(path.join(testHome, '.claude'), { recursive: true });
+  fs.mkdirSync(path.join(testHome, '.config'), { recursive: true });
+  fs.mkdirSync(path.join(testHome, '.cache'), { recursive: true });
+  fs.mkdirSync(path.join(testHome, '.state'), { recursive: true });
+  return testHome;
+}
+
+function ensureGlobalTestEnvironment() {
+  if (bootstrappedTestHome) {
+    return bootstrappedTestHome;
+  }
+
+  const testHome = createIsolatedTestHome();
+  process.env.HOME = testHome;
+  process.env.USERPROFILE = testHome;
+  process.env.CCS_HOME = testHome;
+  process.env.XDG_CONFIG_HOME = path.join(testHome, '.config');
+  process.env.XDG_CACHE_HOME = path.join(testHome, '.cache');
+  process.env.XDG_STATE_HOME = path.join(testHome, '.state');
+  process.env.CCS_TEST_BOOTSTRAP_HOME = testHome;
+
+  bootstrappedTestHome = testHome;
+  patchHomedirForTests();
+  return bootstrappedTestHome;
+}
+
 /**
  * Create an isolated test environment
  * Sets CCS_HOME to a temporary directory and provides cleanup
@@ -40,21 +86,26 @@ const os = require('os');
  */
 function createTestEnvironment() {
   // Create unique temp directory for this test run
-  const tempBase = path.join(os.tmpdir(), 'ccs-test');
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const testHome = path.join(tempBase, uniqueId);
+  const testHome = createIsolatedTestHome('ccs-test-');
   const testCcsDir = path.join(testHome, '.ccs');
-
-  // Create directories
-  fs.mkdirSync(testCcsDir, { recursive: true });
 
   // Store original environment
   const originalHome = process.env.HOME;
   const originalCcsHome = process.env.CCS_HOME;
   const originalUserProfile = process.env.USERPROFILE;
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const originalXdgCacheHome = process.env.XDG_CACHE_HOME;
+  const originalXdgStateHome = process.env.XDG_STATE_HOME;
 
-  // Set test environment - use CCS_HOME for isolation
+  // Keep HOME-family env vars aligned so code that still consults os.homedir()
+  // or XDG defaults stays inside the isolated test sandbox.
+  process.env.HOME = testHome;
+  process.env.USERPROFILE = testHome;
   process.env.CCS_HOME = testHome;
+  process.env.XDG_CONFIG_HOME = path.join(testHome, '.config');
+  process.env.XDG_CACHE_HOME = path.join(testHome, '.cache');
+  process.env.XDG_STATE_HOME = path.join(testHome, '.state');
+  patchHomedirForTests();
 
   // Return environment object
   return {
@@ -117,10 +168,40 @@ function createTestEnvironment() {
      */
     cleanup() {
       // Restore original environment
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+
+      if (originalUserProfile !== undefined) {
+        process.env.USERPROFILE = originalUserProfile;
+      } else {
+        delete process.env.USERPROFILE;
+      }
+
       if (originalCcsHome !== undefined) {
         process.env.CCS_HOME = originalCcsHome;
       } else {
         delete process.env.CCS_HOME;
+      }
+
+      if (originalXdgConfigHome !== undefined) {
+        process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+      } else {
+        delete process.env.XDG_CONFIG_HOME;
+      }
+
+      if (originalXdgCacheHome !== undefined) {
+        process.env.XDG_CACHE_HOME = originalXdgCacheHome;
+      } else {
+        delete process.env.XDG_CACHE_HOME;
+      }
+
+      if (originalXdgStateHome !== undefined) {
+        process.env.XDG_STATE_HOME = originalXdgStateHome;
+      } else {
+        delete process.env.XDG_STATE_HOME;
       }
 
       // Clean up temp directory
@@ -155,6 +236,11 @@ function getCcsDir() {
 
 module.exports = {
   createTestEnvironment,
+  ensureGlobalTestEnvironment,
   getCcsHome,
   getCcsDir
 };
+
+if (process.env.CCS_TEST_DISABLE_GLOBAL_BOOTSTRAP !== '1') {
+  ensureGlobalTestEnvironment();
+}

@@ -106,6 +106,12 @@ describe('unified-config-types', () => {
       expect(config.preferences.auto_update).toBe(true);
     });
 
+    it('should default Official Channels to disabled and attended mode', () => {
+      const config = createEmptyUnifiedConfig();
+      expect(config.channels?.selected).toEqual([]);
+      expect(config.channels?.unattended).toBe(false);
+    });
+
     it('should have CLIProxy providers list', () => {
       const config = createEmptyUnifiedConfig();
       expect(config.cliproxy.providers).toContain('gemini');
@@ -202,13 +208,7 @@ describe('continuity-inheritance-config', () => {
 
     fs.writeFileSync(
       path.join(ccsDir, 'config.yaml'),
-      [
-        'version: 8',
-        'continuity_inherit_from_account:',
-        '  glm: pro',
-        '  empty: ""',
-        '',
-      ].join('\n')
+      ['version: 8', 'continuity_inherit_from_account:', '  glm: pro', '  empty: ""', ''].join('\n')
     );
 
     process.env.CCS_HOME = tempHome;
@@ -256,6 +256,77 @@ describe('continuity-inheritance-config', () => {
         copilot: 'work',
         km: 'account-kimi',
       });
+    } finally {
+      if (originalCcsHome === undefined) {
+        delete process.env.CCS_HOME;
+      } else {
+        process.env.CCS_HOME = originalCcsHome;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('official-channels-config', () => {
+  it('keeps explicit channels.selected empty even when legacy discord_channels.enabled is true', () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-official-channels-home-'));
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 12',
+        'channels:',
+        '  selected: []',
+        '  unattended: false',
+        'discord_channels:',
+        '  enabled: true',
+        '  unattended: true',
+        '',
+      ].join('\n')
+    );
+
+    process.env.CCS_HOME = tempHome;
+    try {
+      const config = loadOrCreateUnifiedConfig();
+      expect(config.channels?.selected).toEqual([]);
+      expect(config.channels?.unattended).toBe(false);
+    } finally {
+      if (originalCcsHome === undefined) {
+        delete process.env.CCS_HOME;
+      } else {
+        process.env.CCS_HOME = originalCcsHome;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
+
+  it('treats the canonical channels section as authoritative even without selected', () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-official-channels-canonical-'));
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 12',
+        'channels:',
+        '  unattended: false',
+        'discord_channels:',
+        '  enabled: true',
+        '  unattended: true',
+        '',
+      ].join('\n')
+    );
+
+    process.env.CCS_HOME = tempHome;
+    try {
+      const config = loadOrCreateUnifiedConfig();
+      expect(config.channels?.selected).toEqual([]);
+      expect(config.channels?.unattended).toBe(false);
     } finally {
       if (originalCcsHome === undefined) {
         delete process.env.CCS_HOME;

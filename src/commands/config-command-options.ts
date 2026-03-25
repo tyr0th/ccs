@@ -83,6 +83,18 @@ export function showConfigCommandHelp(): void {
   console.log('Includes a dedicated Claude IDE Extension page for VS Code-compatible hosts.');
   console.log('');
   console.log('Commands:');
+  console.log('  channels           Manage official Claude channels (Telegram, Discord, iMessage)');
+  console.log('    --set <csv|all>  Select channels to auto-enable at runtime');
+  console.log('    --clear          Clear all selected channels');
+  console.log('    --enable         Legacy alias: add Discord');
+  console.log('    --disable        Legacy alias: remove Discord');
+  console.log('    --unattended     Also add --dangerously-skip-permissions at runtime');
+  console.log('    --set-token <s>  Save channel token (telegram=<t> or discord=<t>)');
+  console.log('    --clear-token    Remove all saved channel tokens');
+  console.log('    --clear-token <c> Remove one saved channel token');
+  console.log('                     Works only for native Claude default/account sessions');
+  console.log('                     Not for ccs glm, other API/OAuth profiles, or Droid targets');
+  console.log('');
   console.log('  auth               Manage dashboard authentication');
   console.log('    auth setup       Configure username and password');
   console.log('    auth show        Display current auth status');
@@ -120,6 +132,9 @@ export function showConfigCommandHelp(): void {
   console.log('  ccs config --host 127.0.0.1      Restrict dashboard to this machine');
   console.log('  ccs config --dev                 Development mode with hot reload');
   console.log('  ccs config auth setup            Configure dashboard login');
+  console.log('  ccs config channels              Show Official Channels status');
+  console.log('  ccs config channels --set telegram,discord Enable Telegram + Discord');
+  console.log('  ccs config channels --set-token telegram=xxx Save TELEGRAM_BOT_TOKEN');
   console.log('  ccs config image-analysis        Show image settings');
   console.log('  ccs config image-analysis --enable Enable feature');
   console.log('  ccs config thinking              Show thinking settings');

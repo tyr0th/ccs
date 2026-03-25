@@ -4,4 +4,5 @@
 # Exclude e2e tests - they require manual setup and are slow
 # Run e2e tests with: bun run test:e2e
 root = "./tests"
+preload = ["./tests/shared/fixtures/test-environment.js"]
 timeout = 10000

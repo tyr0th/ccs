@@ -3,39 +3,35 @@
  * Tests for dashboard authentication middleware and routes.
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import bcrypt from 'bcrypt';
-
-// Mock the config loader
-const mockAuthConfig = {
-  enabled: false,
-  username: '',
-  password_hash: '',
-  session_timeout_hours: 24,
-};
-
-mock.module('../../src/config/unified-config-loader', () => ({
-  getDashboardAuthConfig: () => ({ ...mockAuthConfig }),
-}));
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { getDashboardAuthConfig } from '../../../src/config/unified-config-loader';
+import { runWithScopedConfigDir } from '../../../src/utils/config-manager';
 
 describe('Dashboard Auth', () => {
+  let tempDir = '';
+
   beforeEach(() => {
-    // Reset to default disabled state
-    mockAuthConfig.enabled = false;
-    mockAuthConfig.username = '';
-    mockAuthConfig.password_hash = '';
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-dashboard-auth-'));
+  });
+
+  afterEach(() => {
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   describe('getDashboardAuthConfig', () => {
     it('returns disabled by default', async () => {
-      const { getDashboardAuthConfig } = await import('../../src/config/unified-config-loader');
-      const config = getDashboardAuthConfig();
+      const config = await runWithScopedConfigDir(tempDir, () => getDashboardAuthConfig());
       expect(config.enabled).toBe(false);
     });
 
     it('returns 24 hour default session timeout', async () => {
-      const { getDashboardAuthConfig } = await import('../../src/config/unified-config-loader');
-      const config = getDashboardAuthConfig();
+      const config = await runWithScopedConfigDir(tempDir, () => getDashboardAuthConfig());
       expect(config.session_timeout_hours).toBe(24);
     });
   });
@@ -126,29 +122,29 @@ describe('Dashboard Auth', () => {
 
   describe('auth flow logic', () => {
     it('bypasses auth when disabled', () => {
-      mockAuthConfig.enabled = false;
-      const shouldSkip = !mockAuthConfig.enabled;
+      const shouldSkip = true;
       expect(shouldSkip).toBe(true);
     });
 
     it('requires auth when enabled', () => {
-      mockAuthConfig.enabled = true;
-      mockAuthConfig.username = 'admin';
-      mockAuthConfig.password_hash = '$2b$10$test';
-
-      const shouldSkip = !mockAuthConfig.enabled;
+      const authConfig = {
+        enabled: true,
+        username: 'admin',
+        password_hash: '$2b$10$test',
+      };
+      const shouldSkip = !authConfig.enabled;
       expect(shouldSkip).toBe(false);
     });
 
     it('validates username match', () => {
-      mockAuthConfig.username = 'admin';
-      const usernameMatch = 'admin' === mockAuthConfig.username;
+      const authConfig = { username: 'admin' };
+      const usernameMatch = 'admin' === authConfig.username;
       expect(usernameMatch).toBe(true);
     });
 
     it('rejects wrong username', () => {
-      mockAuthConfig.username = 'admin';
-      const usernameMatch = 'wrong' === mockAuthConfig.username;
+      const authConfig = { username: 'admin' };
+      const usernameMatch = 'wrong' === authConfig.username;
       expect(usernameMatch).toBe(false);
     });
   });

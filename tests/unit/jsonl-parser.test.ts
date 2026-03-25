@@ -16,6 +16,7 @@ import {
   getDefaultProjectsDir,
   type RawUsageEntry,
 } from '../../src/web-server/jsonl-parser';
+import { getDefaultClaudeConfigDir } from '../../src/utils/claude-config-path';
 
 // ============================================================================
 // TEST FIXTURES
@@ -545,6 +546,6 @@ describe('getDefaultProjectsDir', () => {
   test('falls back to ~/.claude/projects', () => {
     delete process.env.CLAUDE_CONFIG_DIR;
     const dir = getDefaultProjectsDir();
-    expect(dir).toBe(path.join(os.homedir(), '.claude', 'projects'));
+    expect(dir).toBe(path.join(getDefaultClaudeConfigDir(), 'projects'));
   });
 });

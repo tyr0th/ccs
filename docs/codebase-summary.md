@@ -1,8 +1,8 @@
 # CCS Codebase Summary
 
-Last Updated: 2026-03-18
+Last Updated: 2026-03-24
 
-Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, v7.34 Image Analysis Hook, and account-context validation hardening.
+Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, v7.34 Image Analysis Hook, account-context validation hardening, and Official Claude Channels runtime support.
 
 ## Repository Structure
 
@@ -83,6 +83,10 @@ src/
 │   ├── index.ts              # Barrel export
 │   ├── unified-config-loader.ts  # Central config loader (546 lines)
 │   └── migration-manager.ts  # Config migration logic
+│
+├── channels/                 # Official Claude channel integration
+│   ├── official-channels-runtime.ts  # Runtime gating, plugin specs, setup guidance
+│   └── official-channels-store.ts    # Claude channel token/env storage helpers
 │
 ├── cliproxy/                 # CLIProxyAPI integration (heavily modularized)
 │   ├── index.ts              # Barrel export (137 lines, extensive)
@@ -174,6 +178,7 @@ src/
     │   ├── index.ts
     │   ├── accounts-route.ts
     │   ├── auth-route.ts
+    │   ├── channels-routes.ts
     │   ├── cliproxy-route.ts
     │   ├── copilot-route.ts
     │   ├── doctor-route.ts
@@ -228,6 +233,15 @@ src/
 - Profile entry point: `src/management/instance-manager.ts`.
 - `plugins/marketplaces/`, `plugins/cache/`, and `installed_plugins.json` stay shared through the `~/.ccs/shared/` topology.
 - `known_marketplaces.json` is now instance-local under `~/.ccs/instances/<profile>/plugins/` so Claude Code validates `installLocation` against the active `CLAUDE_CONFIG_DIR` instead of a last-writer-wins shared file.
+
+### Official Claude Channels
+
+- Runtime contract lives in `src/channels/official-channels-runtime.ts` and is consumed from `src/ccs.ts`, `src/commands/config-channels-command.ts`, and `src/web-server/routes/channels-routes.ts`.
+- Canonical config lives under `channels.*` in `~/.ccs/config.yaml`; legacy `discord_channels.*` remains read-compatible only when canonical fields are absent.
+- Telegram and Discord bot tokens are intentionally written into Claude-managed machine state under `~/.claude/channels/<channel>/.env`, unless the official `*_STATE_DIR` environment override redirects that channel elsewhere.
+- iMessage is tokenless, macOS-only, and still depends on Claude-side plugin install plus OS permissions.
+- Auto-enable is gated on Bun availability, verified Claude Code v2.1.80+, verified `claude.ai` auth, native Claude `default/account` sessions, and per-channel setup readiness.
+- The dashboard channels section surfaces Bun/version/auth/state-scope status from `/api/channels`, preserves token drafts when save-follow-up refresh fails, and keeps unsupported selected iMessage visible only so it can be turned off.
 
 ### Target Adapter Module
 
@@ -420,6 +434,7 @@ ui/src/
 │   │   ├── hooks/
 │   │   │   ├── index.ts
 │   │   │   ├── context-hooks.ts
+│   │   │   ├── use-official-channels-config.ts
 │   │   │   ├── use-settings-tab.ts
 │   │   │   ├── use-proxy-config.ts
 │   │   │   ├── use-websearch-config.ts
@@ -429,6 +444,7 @@ ui/src/
 │   │   │   ├── section-skeleton.tsx
 │   │   │   └── tab-navigation.tsx
 │   │   └── sections/
+│   │       ├── channels.tsx
 │   │       ├── globalenv-section.tsx
 │   │       ├── websearch/
 │   │       │   ├── index.tsx
