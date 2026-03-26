@@ -58,9 +58,30 @@ function resolveProviderFromTokenType(typeValue: string): CLIProxyProvider | und
   return undefined;
 }
 
-function inferEmailFromTokenFileName(tokenFile: string): string | undefined {
-  const match = tokenFile.match(/([^-]+@[^.]+\.[^.]+)(?=\.json$)/);
-  return match?.[1];
+const EMAIL_FILE_NAME_PATTERN = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+
+function inferEmailFromTokenFileName(
+  tokenFile: string,
+  provider: CLIProxyProvider
+): string | undefined {
+  const baseName = tokenFile.replace(/\.json$/i, '');
+  const providerPrefix = `${provider}-`;
+  const candidate = baseName.startsWith(providerPrefix)
+    ? baseName.slice(providerPrefix.length)
+    : baseName;
+
+  if (PROVIDERS_WITHOUT_EMAIL.includes(provider)) {
+    const scopedCandidate = candidate.slice(candidate.indexOf('-') + 1);
+    if (
+      scopedCandidate &&
+      scopedCandidate !== candidate &&
+      EMAIL_FILE_NAME_PATTERN.test(scopedCandidate)
+    ) {
+      return scopedCandidate;
+    }
+  }
+
+  return EMAIL_FILE_NAME_PATTERN.test(candidate) ? candidate : undefined;
 }
 
 interface RegistryPopulationIssue {
@@ -120,7 +141,7 @@ function populateRegistryFromTokenFiles(
       const email =
         typeof data.email === 'string' && data.email.trim()
           ? data.email.trim()
-          : inferEmailFromTokenFileName(token.tokenFile);
+          : inferEmailFromTokenFileName(token.tokenFile, provider);
 
       const existingEntry = Object.entries(providerAccounts.accounts).find(
         ([, account]) => account.tokenFile === token.tokenFile
@@ -211,12 +232,13 @@ function recoverAccountsRegistryFromCorruption(registryPath: string): AccountsRe
   writeAccountsRegistryToDisk(recovered);
 
   if (issues.length > 0) {
-    const recoveredFrom = backupPath || registryPath;
     console.error(
-      `[!] Recovered corrupted account registry from ${recoveredFrom}, but skipped ${issues.length} token file(s): ${issues
+      `[!] Recovered corrupted account registry${backupPath ? `; backup saved to ${backupPath}` : ''}, but skipped ${issues.length} token file(s): ${issues
         .map(describeRegistryPopulationIssue)
         .join(', ')}`
     );
+  } else if (backupPath) {
+    console.error(`[i] Recovered corrupted account registry; backup saved to ${backupPath}`);
   }
 
   return recovered;

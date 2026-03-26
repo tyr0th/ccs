@@ -215,6 +215,19 @@ describe('Account Manager - discoverExistingAccounts', () => {
       const accountIds = Object.keys(accounts.providers.kiro.accounts);
       assert.strictEqual(accountIds[0], 'user+tag@example.com', 'Should handle plus addressing');
     });
+
+    it('handles subdomain email addresses', () => {
+      createAuthFile('codex-user@mail.example.com.json', {
+        type: 'codex',
+        email: '',
+      });
+
+      accountManager.discoverExistingAccounts();
+      const accounts = getAccountsFile();
+
+      const accountIds = Object.keys(accounts.providers.codex.accounts);
+      assert.strictEqual(accountIds[0], 'user@mail.example.com', 'Should handle subdomains');
+    });
   });
 
   // =========================================================================

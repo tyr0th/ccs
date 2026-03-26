@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -37,6 +37,12 @@ async function captureConsoleError<T>(fn: () => Promise<T> | T): Promise<{ resul
   } finally {
     console.error = originalError;
   }
+}
+
+function listRegistryBackups(registryPath: string): string[] {
+  return fs
+    .readdirSync(path.dirname(registryPath))
+    .filter((file) => /^accounts\.json\.corrupt-.*\.bak$/.test(file));
 }
 
 describe('account registry integrity', () => {
@@ -134,9 +140,7 @@ describe('account registry integrity', () => {
         'codex-user@example.com.json'
       );
 
-      const backups = fs
-        .readdirSync(path.dirname(registryPath))
-        .filter((file) => /^accounts\.json\.corrupt-.*\.bak$/.test(file));
+      const backups = listRegistryBackups(registryPath);
       expect(backups).toHaveLength(1);
       expect(
         fs.readFileSync(path.join(path.dirname(registryPath), backups[0] as string), 'utf8')
@@ -196,6 +200,31 @@ describe('account registry integrity', () => {
     });
   });
 
+  it('logs successful corruption recovery even when every token file is recoverable', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const authDir = path.join(homeDir, '.ccs', 'cliproxy', 'auth');
+      const registryPath = path.join(homeDir, '.ccs', 'cliproxy', 'accounts.json');
+      fs.mkdirSync(authDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(authDir, 'codex-clean@example.com.json'),
+        JSON.stringify({ type: 'codex', email: 'clean@example.com' }),
+        'utf8'
+      );
+      fs.writeFileSync(registryPath, '{"providers":', 'utf8');
+
+      const { getProviderAccounts } = await loadAccountManager();
+      const { result: accounts, messages } = await captureConsoleError(() =>
+        getProviderAccounts('codex')
+      );
+
+      expect(accounts).toHaveLength(1);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('Recovered corrupted account registry');
+      expect(messages[0]).toContain('backup saved to');
+      expect(messages[0]).not.toContain('skipped');
+    });
+  });
+
   it('prefers active tokens over paused duplicates during corruption recovery', async () => {
     await withIsolatedHome(async (homeDir) => {
       const cliproxyDir = path.join(homeDir, '.ccs', 'cliproxy');
@@ -227,6 +256,72 @@ describe('account registry integrity', () => {
     });
   });
 
+  it('infers subdomain emails from token file names during corruption recovery', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const authDir = path.join(homeDir, '.ccs', 'cliproxy', 'auth');
+      const registryPath = path.join(homeDir, '.ccs', 'cliproxy', 'accounts.json');
+      fs.mkdirSync(authDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(authDir, 'codex-user@mail.example.com.json'),
+        JSON.stringify({ type: 'codex' }),
+        'utf8'
+      );
+      fs.writeFileSync(registryPath, '{"providers":', 'utf8');
+
+      const { getProviderAccounts } = await loadAccountManager();
+      const accounts = getProviderAccounts('codex');
+
+      expect(accounts).toHaveLength(1);
+      expect(accounts[0]?.id).toBe('user@mail.example.com');
+      expect(accounts[0]?.email).toBe('user@mail.example.com');
+      expect(accounts[0]?.tokenFile).toBe('codex-user@mail.example.com.json');
+    });
+  });
+
+  it('preserves the corrupted registry backup when recovery cannot rewrite accounts.json', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const authDir = path.join(homeDir, '.ccs', 'cliproxy', 'auth');
+      const registryPath = path.join(homeDir, '.ccs', 'cliproxy', 'accounts.json');
+      fs.mkdirSync(authDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(authDir, 'codex-user@example.com.json'),
+        JSON.stringify({ type: 'codex', email: 'user@example.com' }),
+        'utf8'
+      );
+      fs.writeFileSync(registryPath, '{"providers":', 'utf8');
+
+      const originalWriteFileSync = fs.writeFileSync;
+      const writeSpy = spyOn(fs, 'writeFileSync').mockImplementation(((file, data, options) => {
+        if (String(file).includes('accounts.json.tmp.')) {
+          throw new Error('simulated recovery write failure');
+        }
+
+        return originalWriteFileSync(file, data, options as never);
+      }) as typeof fs.writeFileSync);
+
+      try {
+        const { loadAccountsRegistry } = await loadRegistryModule();
+
+        expect(() => loadAccountsRegistry()).toThrow('simulated recovery write failure');
+      } finally {
+        writeSpy.mockRestore();
+      }
+
+      expect(fs.existsSync(registryPath)).toBe(false);
+      const backups = listRegistryBackups(registryPath);
+      expect(backups).toHaveLength(1);
+      expect(
+        fs.readFileSync(path.join(path.dirname(registryPath), backups[0] as string), 'utf8')
+      ).toBe('{"providers":');
+
+      const { loadAccountsRegistry } = await loadRegistryModule();
+      expect(loadAccountsRegistry()).toEqual({
+        version: 1,
+        providers: {},
+      });
+    });
+  });
+
   it('does not repopulate paused tokens during normal startup discovery', async () => {
     await withIsolatedHome(async (homeDir) => {
       const pausedDir = path.join(homeDir, '.ccs', 'cliproxy', 'auth-paused');
@@ -245,6 +340,28 @@ describe('account registry integrity', () => {
 
       const { getProviderAccounts } = await loadAccountManager();
       expect(getProviderAccounts('codex')).toEqual([]);
+    });
+  });
+
+  it('recovers to an empty registry when no token files are available', async () => {
+    await withIsolatedHome(async (homeDir) => {
+      const cliproxyDir = path.join(homeDir, '.ccs', 'cliproxy');
+      const registryPath = path.join(cliproxyDir, 'accounts.json');
+      fs.mkdirSync(cliproxyDir, { recursive: true });
+      fs.writeFileSync(registryPath, '{"providers":', 'utf8');
+
+      const { loadAccountsRegistry } = await loadRegistryModule();
+      const { result: registry, messages } = await captureConsoleError(() => loadAccountsRegistry());
+
+      expect(registry).toEqual({
+        version: 1,
+        providers: {},
+      });
+      expect(fs.existsSync(registryPath)).toBe(true);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('Recovered corrupted account registry');
+      expect(messages[0]).toContain('backup saved to');
+      expect(listRegistryBackups(registryPath)).toHaveLength(1);
     });
   });
 });
