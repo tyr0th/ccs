@@ -15,7 +15,11 @@ import type { UnifiedQuotaResult } from '@/lib/utils';
 
 /** Per-account usage statistics */
 export interface AccountUsageStats {
-  /** Account email or identifier */
+  /** Provider-qualified lookup key (for example: "codex:user@example.com") */
+  accountKey?: string;
+  /** Canonical provider name reported by CLIProxyAPI */
+  provider?: string;
+  /** Raw account email or identifier */
   source: string;
   /** Number of successful requests */
   successCount: number;

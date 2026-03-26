@@ -40,6 +40,7 @@ import {
   isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
+import { getAccountStats } from '@/lib/cliproxy-account-stats';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { useAccountQuota, useCliproxyStats } from '@/hooks/use-cliproxy-stats';
 import { QuotaTooltipContent } from '@/components/shared/quota-tooltip-content';
@@ -124,7 +125,7 @@ export function AccountItem({
   );
 
   // Get last used time from runtime stats (more accurate than file)
-  const runtimeLastUsed = stats?.accountStats?.[account.email || account.id]?.lastUsedAt;
+  const runtimeLastUsed = getAccountStats(stats, account)?.lastUsedAt;
   const wasRecentlyUsed = isRecentlyUsed(runtimeLastUsed);
 
   // Use shared utility functions for provider-specific quota handling

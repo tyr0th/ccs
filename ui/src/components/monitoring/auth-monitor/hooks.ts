@@ -4,8 +4,9 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
-import { useCliproxyStats, type AccountUsageStats } from '@/hooks/use-cliproxy-stats';
+import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
 import { getProviderDisplayName } from '@/lib/provider-config';
+import { getAccountStats } from '@/lib/cliproxy-account-stats';
 import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
 import type { AccountRow, ProviderStats } from './types';
 import { ACCOUNT_COLORS } from './utils';
@@ -44,12 +45,6 @@ export function useAuthMonitorData(): AuthMonitorData {
     return () => clearInterval(interval);
   }, [dataUpdatedAt]);
 
-  // Build a map of account email -> usage stats from CLIProxy
-  const accountStatsMap = useMemo(() => {
-    if (!statsData?.accountStats) return new Map<string, AccountUsageStats>();
-    return new Map(Object.entries(statsData.accountStats));
-  }, [statsData?.accountStats]);
-
   // Transform auth status data into account rows
   const { accounts, totalSuccess, totalFailure, totalRequests, providerStats } = useMemo(() => {
     if (!data?.authStatus) {
@@ -80,8 +75,7 @@ export function useAuthMonitorData(): AuthMonitorData {
       if (!providerData) return;
 
       status.accounts?.forEach((account: OAuthAccount) => {
-        const accountEmail = account.email || account.id;
-        const realStats = accountStatsMap.get(accountEmail);
+        const realStats = getAccountStats(statsData, account);
         const success = realStats?.successCount ?? 0;
         const failure = realStats?.failureCount ?? 0;
         tSuccess += success;
@@ -132,7 +126,7 @@ export function useAuthMonitorData(): AuthMonitorData {
       totalRequests: tSuccess + tFailure,
       providerStats: providerStatsArr,
     };
-  }, [data?.authStatus, accountStatsMap]);
+  }, [data?.authStatus, statsData]);
 
   const overallSuccessRate =
     totalRequests > 0 ? Math.round((totalSuccess / totalRequests) * 100) : 100;

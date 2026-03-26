@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertCircle, XCircle, MinusCircle, RefreshCw, Clock } from 'lucide-react';
 import { useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
+import { getAccountStats } from '@/lib/cliproxy-account-stats';
 import { cn } from '@/lib/utils';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { useTranslation } from 'react-i18next';
@@ -155,8 +156,7 @@ export function CredentialHealthList() {
   const credentials =
     authData?.authStatus.flatMap((status) =>
       (status.accounts ?? []).map((account) => {
-        const accountKey = account.email || account.id;
-        const runtimeLastUsed = stats?.accountStats?.[accountKey]?.lastUsedAt;
+        const runtimeLastUsed = getAccountStats(stats, account)?.lastUsedAt;
         return {
           name: account.id,
           provider: status.provider,
