@@ -25,7 +25,13 @@ import { syncToLocalConfig } from '../../cliproxy/sync/local-config-sync';
 import type { TargetType } from '../../targets/target-adapter';
 import { color, dim, fail, header, info, infoBox, initUI, warn } from '../../utils/ui';
 import { InteractivePrompt } from '../../utils/prompt';
-import { exitOnApiCommandErrors, parseApiCommandArgs } from './shared';
+import {
+  applyClaudeExtendedContextPreference,
+  exitOnApiCommandErrors,
+  hasClaudeModelMapping,
+  hasExplicitClaudeExtendedContext,
+  parseApiCommandArgs,
+} from './shared';
 
 function resolvePresetOrExit(presetId?: string): ProviderPreset | null {
   if (!presetId) {
@@ -276,6 +282,37 @@ async function resolveDefaultTarget(
   return useDroidByDefault ? 'droid' : 'claude';
 }
 
+async function resolveClaudeLongContextPreference(
+  models: ModelMapping,
+  explicitPreference: boolean | undefined,
+  yes: boolean | undefined
+): Promise<boolean> {
+  if (explicitPreference !== undefined) {
+    return explicitPreference;
+  }
+
+  if (hasExplicitClaudeExtendedContext(models)) {
+    return true;
+  }
+
+  if (yes) {
+    return false;
+  }
+
+  console.log('');
+  console.log(info('Claude long context is explicit in CCS.'));
+  console.log(dim('  Plain Claude model IDs stay on standard context unless you opt into [1m].'));
+  console.log(
+    dim('  Some providers/accounts still require extra usage or PAYG for long-context requests.')
+  );
+  console.log(dim('  If that entitlement is missing, upstream requests can still return 429.'));
+  console.log('');
+
+  return InteractivePrompt.confirm('Enable [1m] for compatible Claude mappings?', {
+    default: false,
+  });
+}
+
 export async function handleApiCreateCommand(args: string[]): Promise<void> {
   await initUI();
   const parsedArgs = parseApiCommandArgs(args);
@@ -403,17 +440,31 @@ export async function handleApiCreateCommand(args: string[]): Promise<void> {
   }
 
   const apiKey = await resolveApiKey(parsedArgs.apiKey, preset);
-  const { model, models } = await resolveModelConfiguration(
+  const { models } = await resolveModelConfiguration(
     baseUrl,
     preset,
     parsedArgs.model,
     parsedArgs.yes
   );
+  const hasClaudeMappings = hasClaudeModelMapping(models);
+  const shouldEnableClaudeLongContext = hasClaudeMappings
+    ? await resolveClaudeLongContextPreference(models, parsedArgs.extendedContext, parsedArgs.yes)
+    : false;
+  const finalModels = hasClaudeMappings
+    ? applyClaudeExtendedContextPreference(models, shouldEnableClaudeLongContext)
+    : models;
   const target = await resolveDefaultTarget(parsedArgs.target, parsedArgs.yes);
+
+  if (parsedArgs.extendedContext !== undefined && !hasClaudeMappings) {
+    console.log('');
+    console.log(
+      dim('No compatible Claude mappings were detected, so --1m/--no-1m did not change models.')
+    );
+  }
 
   console.log('');
   console.log(info('Creating API profile...'));
-  const result = createApiProfile(name, baseUrl || '', apiKey, models, target);
+  const result = createApiProfile(name, baseUrl || '', apiKey, finalModels, target);
   if (!result.success) {
     console.log(fail(`Failed to create API profile: ${result.error}`));
     process.exit(1);
@@ -427,25 +478,43 @@ export async function handleApiCreateCommand(args: string[]): Promise<void> {
   }
 
   const hasCustomMapping =
-    models.opus !== model || models.sonnet !== model || models.haiku !== model;
+    finalModels.opus !== finalModels.default ||
+    finalModels.sonnet !== finalModels.default ||
+    finalModels.haiku !== finalModels.default;
   let details =
     `API:      ${name}\n` +
     `Config:   ${isUsingUnifiedConfig() ? '~/.ccs/config.yaml' : '~/.ccs/config.json'}\n` +
     `Settings: ${result.settingsFile}\n` +
     `Base URL: ${baseUrl}\n` +
-    `Model:    ${model}\n` +
+    `Model:    ${finalModels.default}\n` +
     `Target:   ${target}`;
+
+  if (hasClaudeMappings) {
+    details += `\nLongCtx:  ${
+      shouldEnableClaudeLongContext ? 'compatible Claude mappings use [1m]' : 'standard Claude context'
+    }`;
+  }
 
   if (hasCustomMapping) {
     details +=
       `\n\nModel Mapping:\n` +
-      `  Opus:   ${models.opus}\n` +
-      `  Sonnet: ${models.sonnet}\n` +
-      `  Haiku:  ${models.haiku}`;
+      `  Opus:   ${finalModels.opus}\n` +
+      `  Sonnet: ${finalModels.sonnet}\n` +
+      `  Haiku:  ${finalModels.haiku}`;
   }
 
   console.log('');
   console.log(infoBox(details, 'API Profile Created'));
+  if (hasClaudeMappings) {
+    console.log('');
+    console.log(
+      dim(
+        shouldEnableClaudeLongContext
+          ? 'CCS saved [1m] on compatible Claude mappings. Provider-side extra-usage requirements can still reject long-context requests.'
+          : 'Claude mappings were saved with standard context. Use --1m later if you want CCS to write [1m] explicitly.'
+      )
+    );
+  }
   console.log('');
   console.log(header('Usage'));
   if (target === 'droid') {

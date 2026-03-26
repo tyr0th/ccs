@@ -13,9 +13,10 @@ import type { CLIProxyProvider } from '../types';
 import { supportsExtendedContext } from '../model-catalog';
 import { warn } from '../../utils/ui';
 import {
+  applyExtendedContextPreferenceToAnthropicModels,
   applyExtendedContextSuffix as applyExtendedContextSuffixShared,
   isNativeGeminiModel,
-  stripExtendedContextSuffix,
+  stripModelConfigurationSuffixes,
 } from '../../shared/extended-context-utils';
 
 // Backward-compatible export retained for tests/importers that reference this module.
@@ -72,57 +73,20 @@ export function applyExtendedContextConfig(
   provider: CLIProxyProvider,
   extendedContextOverride?: boolean
 ): void {
-  // Get base model to check support (strip any existing suffixes for lookup)
-  const baseModel = envVars.ANTHROPIC_MODEL || '';
-  const cleanModelId = stripModelSuffixes(baseModel);
-
-  // Tier model env vars to apply/strip extended context suffix
-  const tierModels = [
-    'ANTHROPIC_DEFAULT_OPUS_MODEL',
-    'ANTHROPIC_DEFAULT_SONNET_MODEL',
-    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-  ] as const;
-
-  if (!shouldApplyExtendedContext(provider, cleanModelId, extendedContextOverride)) {
-    // Strip [1m] suffix from models that no longer support extended context
-    // (e.g., user had it enabled before backend dropped support)
-    if (envVars.ANTHROPIC_MODEL?.toLowerCase().endsWith('[1m]')) {
-      envVars.ANTHROPIC_MODEL = envVars.ANTHROPIC_MODEL.replace(/\[1m\]$/i, '');
-    }
-    for (const tierVar of tierModels) {
-      const model = envVars[tierVar];
-      if (model?.toLowerCase().endsWith('[1m]')) {
-        envVars[tierVar] = model.replace(/\[1m\]$/i, '');
-      }
-    }
+  if (extendedContextOverride === false) {
+    Object.assign(envVars, applyExtendedContextPreferenceToAnthropicModels(envVars, false));
     return;
   }
 
-  // Apply suffix to main model
-  if (envVars.ANTHROPIC_MODEL) {
-    envVars.ANTHROPIC_MODEL = applyExtendedContextSuffixShared(envVars.ANTHROPIC_MODEL);
-  }
-
-  // Apply to tier models if they support extended context
-
-  for (const tierVar of tierModels) {
-    const model = envVars[tierVar];
-    if (model) {
-      const tierCleanId = stripModelSuffixes(model);
-      if (shouldApplyExtendedContext(provider, tierCleanId, extendedContextOverride)) {
-        envVars[tierVar] = applyExtendedContextSuffixShared(model);
-      }
-    }
-  }
-}
-
-/**
- * Strip thinking and extended context suffixes from model ID for catalog lookup.
- * Examples:
- *   "gemini-2.5-pro(high)[1m]" -> "gemini-2.5-pro"
- *   "gemini-2.5-pro(8192)" -> "gemini-2.5-pro"
- *   "gemini-2.5-pro" -> "gemini-2.5-pro"
- */
-function stripModelSuffixes(modelId: string): string {
-  return stripExtendedContextSuffix(modelId.trim()).replace(/\([^)]+\)$/, '');
+  Object.assign(
+    envVars,
+    applyExtendedContextPreferenceToAnthropicModels(envVars, true, {
+      supportsExtendedContext: (modelId) =>
+        shouldApplyExtendedContext(
+          provider,
+          stripModelConfigurationSuffixes(modelId),
+          extendedContextOverride
+        ),
+    })
+  );
 }

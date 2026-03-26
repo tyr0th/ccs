@@ -11,6 +11,7 @@ import { Sparkles, Zap, Star, X, Plus } from 'lucide-react';
 import { FlexibleModelSelector } from '../provider-model-selector';
 import { ExtendedContextToggle } from '../extended-context-toggle';
 import { stripExtendedContextSuffix } from '@/lib/extended-context-utils';
+import { findCatalogModel } from '@/lib/model-catalogs';
 import type { ModelConfigSectionProps } from './types';
 
 type CatalogPresetModel = NonNullable<ModelConfigSectionProps['catalog']>['models'][number];
@@ -48,13 +49,18 @@ export function ModelConfigSection({
   onDeletePreset,
   isDeletePending,
 }: ModelConfigSectionProps) {
-  // Find current model entry to check for extended context support
-  // Strip [1m] suffix when looking up in catalog since catalog IDs don't have suffix
-  const currentModelEntry = useMemo(() => {
-    if (!catalog || !currentModel) return undefined;
-    const baseModelId = stripExtendedContextSuffix(currentModel);
-    return catalog.models.find((m) => m.id === baseModelId);
-  }, [catalog, currentModel]);
+  const extendedContextModels = useMemo(() => {
+    if (!catalog) return [];
+
+    const selectedModels = [currentModel, opusModel, sonnetModel, haikuModel]
+      .filter((modelId): modelId is string => Boolean(modelId))
+      .map((modelId) => stripExtendedContextSuffix(modelId));
+
+    const uniqueIds = [...new Set(selectedModels)];
+    return uniqueIds
+      .map((modelId) => findCatalogModel(catalog.provider, modelId))
+      .filter((model): model is NonNullable<typeof model> => Boolean(model?.extendedContext));
+  }, [catalog, currentModel, opusModel, sonnetModel, haikuModel]);
 
   const presetGroups = useMemo(() => {
     const presetModels = (catalog?.models ?? []).filter((model) => model.presetMapping);
@@ -199,10 +205,10 @@ export function ModelConfigSection({
             catalog={catalog}
             allModels={providerModels}
           />
-          {/* Extended Context Toggle - only shows for models that support it */}
-          {currentModelEntry?.extendedContext && onExtendedContextToggle && (
+          {/* Extended Context Toggle - shows when any saved mapping supports it */}
+          {extendedContextModels.length > 0 && onExtendedContextToggle && (
             <ExtendedContextToggle
-              model={currentModelEntry}
+              models={extendedContextModels}
               provider={provider}
               enabled={extendedContextEnabled ?? false}
               onToggle={onExtendedContextToggle}

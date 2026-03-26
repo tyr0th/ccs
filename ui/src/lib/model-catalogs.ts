@@ -4,6 +4,7 @@
  */
 
 import type { ProviderCatalog } from '@/components/cliproxy/provider-model-selector';
+import { stripModelConfigurationSuffixes } from '@/lib/extended-context-utils';
 
 /** Model catalog data - mirrors src/cliproxy/model-catalog.ts */
 export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
@@ -553,3 +554,15 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
     ],
   },
 };
+
+export function findCatalogModel(provider: string, modelId: string) {
+  const catalog = MODEL_CATALOGS[provider.toLowerCase()];
+  if (!catalog) return undefined;
+
+  const normalizedModelId = stripModelConfigurationSuffixes(modelId);
+  return catalog.models.find((model) => model.id === normalizedModelId);
+}
+
+export function supportsExtendedContext(provider: string, modelId: string): boolean {
+  return findCatalogModel(provider, modelId)?.extendedContext === true;
+}

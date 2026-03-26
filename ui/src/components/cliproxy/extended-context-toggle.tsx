@@ -1,7 +1,6 @@
 /**
  * Extended Context Toggle Component
- * Shows toggle for models that support 1M token context window.
- * Only visible when selected model has extendedContext: true.
+ * Shows toggle when any selected mapping supports 1M token context.
  */
 
 import { Zap, Info } from 'lucide-react';
@@ -12,8 +11,8 @@ import { isNativeGeminiModel } from '@/lib/extended-context-utils';
 import type { ModelEntry } from './provider-model-selector';
 
 interface ExtendedContextToggleProps {
-  /** Currently selected model */
-  model: ModelEntry | undefined;
+  /** Compatible selected models */
+  models: ModelEntry[];
   /** Provider name for display */
   provider: string;
   /** Whether extended context is enabled */
@@ -27,19 +26,28 @@ interface ExtendedContextToggleProps {
 }
 
 export function ExtendedContextToggle({
-  model,
-  provider,
+  models,
+  provider: _provider,
   enabled,
   onToggle,
   disabled,
   className,
 }: ExtendedContextToggleProps) {
-  // Only show if model supports extended context
-  if (!model?.extendedContext) {
+  if (models.length === 0) {
     return null;
   }
 
-  const isAutoEnabled = isNativeGeminiModel(model.id);
+  const hasGeminiModels = models.some((model) => isNativeGeminiModel(model.id));
+  const hasClaudeModels = models.some((model) => !isNativeGeminiModel(model.id));
+
+  let behaviorHint = 'Compatible mappings stay on standard context unless you turn this on.';
+  if (hasGeminiModels && hasClaudeModels) {
+    behaviorHint =
+      'Gemini-compatible mappings can use 1M automatically. Claude mappings stay plain unless you turn this on.';
+  } else if (hasGeminiModels) {
+    behaviorHint =
+      'Gemini-compatible mappings can use 1M by default. Turn this off to keep standard context.';
+  }
 
   return (
     <div
@@ -65,19 +73,12 @@ export function ExtendedContextToggle({
       <div className="flex items-start gap-2 text-xs text-muted-foreground">
         <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
         <div className="space-y-1">
-          <p>Enables 1M token context window instead of default 200K.</p>
-          <p className="text-[10px]">
-            {isAutoEnabled ? (
-              <span className="text-primary">Auto-enabled for {provider} Gemini models</span>
-            ) : (
-              <span>Opt-in for {provider} Claude models via --1m flag</span>
-            )}
+          <p>Applies the explicit <code>[1m]</code> long-context suffix to compatible saved mappings.</p>
+          <p className="text-[10px]">{behaviorHint}</p>
+          <p className="text-amber-600 dark:text-amber-500">
+            CCS only saves <code>[1m]</code>. Provider pricing and entitlement are separate, and
+            some accounts can still return 429 extra-usage errors for long-context requests.
           </p>
-          {enabled && (
-            <p className="text-amber-600 dark:text-amber-500">
-              Note: 2x input pricing applies for tokens beyond 200K
-            </p>
-          )}
         </div>
       </div>
     </div>

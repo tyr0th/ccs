@@ -56,6 +56,9 @@ export async function showApiCommandHelp(): Promise<void> {
   console.log(`  ${color('--api-key <key>', 'command')}      API key (create)`);
   console.log(`  ${color('--model <model>', 'command')}      Default model (create)`);
   console.log(
+    `  ${color('--1m / --no-1m', 'command')}         Write or clear [1m] on compatible Claude mappings`
+  );
+  console.log(
     `  ${color('--target <cli>', 'command')}       Default target: claude or droid (create)`
   );
   console.log(`  ${color('--register', 'command')}           Register discovered orphan settings`);
@@ -84,10 +87,22 @@ export async function showApiCommandHelp(): Promise<void> {
   console.log('');
   console.log(`  ${dim('# Quick setup with preset')}`);
   console.log(`  ${color('ccs api create --preset anthropic', 'command')}`);
+  console.log(
+    `  ${color('ccs api create --preset anthropic --1m', 'command')} ${dim('# explicit Claude [1m] opt-in')}`
+  );
   console.log(`  ${color('ccs api create --preset openrouter', 'command')}`);
   console.log(`  ${color('ccs api create --preset alibaba-coding-plan', 'command')}`);
   console.log(`  ${color('ccs api create --preset alibaba', 'command')} ${dim('# alias')}`);
   console.log(`  ${color('ccs api create --preset glm', 'command')}`);
+  console.log('');
+  console.log(subheader('Claude Long Context'));
+  console.log(`  ${dim('Plain Claude model IDs stay on standard context by default.')}`);
+  console.log(
+    `  ${dim('Use --1m during create to append [1m] to compatible Claude mappings, or --no-1m to force plain IDs.')}`
+  );
+  console.log(
+    `  ${dim('CCS controls only the saved [1m] suffix. Provider pricing/entitlement stay upstream, and some accounts can still return 429 for long-context requests.')}`
+  );
   console.log('');
   console.log(`  ${dim('# Create routed profile from existing CLIProxy provider config')}`);
   console.log(`  ${color('ccs api create --cliproxy-provider gemini', 'command')}`);

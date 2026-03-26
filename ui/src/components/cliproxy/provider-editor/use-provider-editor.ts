@@ -8,13 +8,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { SettingsResponse, UseProviderEditorReturn } from './types';
 import {
-  applyExtendedContextSuffix,
-  stripExtendedContextSuffix,
-  hasExtendedContextSuffix,
+  applyExtendedContextPreferenceToAnthropicModels,
+  hasAnthropicExtendedContextEnabled,
+  isAnthropicModelEnvKey,
 } from '@/lib/extended-context-utils';
-
-/** Model env keys that should have [1m] suffix applied */
-const MODEL_ENV_KEYS = ['ANTHROPIC_MODEL'] as const;
+import { supportsExtendedContext } from '@/lib/model-catalogs';
 
 /** Required env vars for CLIProxy providers (informational only - runtime fills defaults) */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
@@ -78,56 +76,59 @@ export function useProviderEditor(provider: string): UseProviderEditorReturn {
 
   // Extended context is enabled if any model has [1m] suffix
   const extendedContextEnabled = useMemo(() => {
-    const env = currentSettings?.env || {};
-    return MODEL_ENV_KEYS.some((key) => {
-      const value = env[key];
-      return value && hasExtendedContextSuffix(value);
-    });
+    return hasAnthropicExtendedContextEnabled(currentSettings?.env || {});
   }, [currentSettings]);
+
+  const applySavedLongContextIntent = useCallback(
+    (env: Record<string, string>, enabled: boolean) =>
+      applyExtendedContextPreferenceToAnthropicModels(env, enabled, {
+        supportsExtendedContext: (modelId) => supportsExtendedContext(provider, modelId),
+      }),
+    [provider]
+  );
 
   // Update a single setting value
   const updateEnvValue = useCallback(
     (key: string, value: string) => {
       const newEnv = { ...(currentSettings?.env || {}), [key]: value };
-      const newSettings = { ...currentSettings, env: newEnv };
+      const envWithIntent = isAnthropicModelEnvKey(key)
+        ? applySavedLongContextIntent(newEnv, extendedContextEnabled)
+        : newEnv;
+      delete envWithIntent['CCS_EXTENDED_CONTEXT'];
+
+      const newSettings = { ...currentSettings, env: envWithIntent };
       setRawJsonEdits(JSON.stringify(newSettings, null, 2));
     },
-    [currentSettings]
+    [applySavedLongContextIntent, currentSettings, extendedContextEnabled]
   );
 
   // Toggle extended context - applies/strips [1m] suffix to all model env vars
   const toggleExtendedContext = useCallback(
     (enabled: boolean) => {
       const env = currentSettings?.env || {};
-      const updates: Record<string, string> = {};
-
-      for (const key of MODEL_ENV_KEYS) {
-        const value = env[key];
-        if (value) {
-          updates[key] = enabled
-            ? applyExtendedContextSuffix(value)
-            : stripExtendedContextSuffix(value);
-        }
-      }
-
-      // Remove the legacy flag if present
-      const newEnv = { ...env, ...updates };
+      const newEnv = applySavedLongContextIntent(env, enabled);
       delete newEnv['CCS_EXTENDED_CONTEXT'];
 
       const newSettings = { ...currentSettings, env: newEnv };
       setRawJsonEdits(JSON.stringify(newSettings, null, 2));
     },
-    [currentSettings]
+    [applySavedLongContextIntent, currentSettings]
   );
 
   // Batch update multiple env values at once
   const updateEnvValues = useCallback(
     (updates: Record<string, string>) => {
       const newEnv = { ...(currentSettings?.env || {}), ...updates };
-      const newSettings = { ...currentSettings, env: newEnv };
+      const touchesAnthropicModel = Object.keys(updates).some(isAnthropicModelEnvKey);
+      const envWithIntent = touchesAnthropicModel
+        ? applySavedLongContextIntent(newEnv, extendedContextEnabled)
+        : newEnv;
+      delete envWithIntent['CCS_EXTENDED_CONTEXT'];
+
+      const newSettings = { ...currentSettings, env: envWithIntent };
       setRawJsonEdits(JSON.stringify(newSettings, null, 2));
     },
-    [currentSettings]
+    [applySavedLongContextIntent, currentSettings, extendedContextEnabled]
   );
 
   // Check if JSON is valid

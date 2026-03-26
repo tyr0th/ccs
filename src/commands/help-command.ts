@@ -220,8 +220,8 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
         'Set thinking budget (low/medium/high/xhigh/auto/off or number)',
       ],
       ['ccs codex --effort <level>', 'Set codex reasoning effort (medium/high/xhigh)'],
-      ['ccs <provider> --1m', 'Enable 1M token context window'],
-      ['ccs <provider> --no-1m', 'Disable 1M context (use 200K default)'],
+      ['ccs <provider> --1m', 'Request explicit 1M context when the selected model supports [1m]'],
+      ['ccs <provider> --no-1m', 'Force standard context / clear [1m]'],
       ['ccs <provider> --logout', 'Clear authentication'],
       ['ccs <provider> --headless', 'Headless auth (for SSH)'],
       ['ccs <provider> --port-forward', 'Force port-forwarding mode (skip prompt)'],
@@ -449,14 +449,15 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
 
   // Extended Context (1M)
   printSubSection('Extended Context (--1m)', [
-    ['--1m', 'Enable 1M token context window'],
-    ['--no-1m', 'Disable 1M context (use 200K default)'],
+    ['--1m', 'Request 1M token context when the selected model supports [1m]'],
+    ['--no-1m', 'Force standard context (Claude default stays plain)'],
     ['', ''],
-    ['Auto behavior:', 'Gemini models: auto-enabled by default'],
-    ['', 'Claude models: opt-in with --1m flag'],
+    ['Auto behavior:', 'Gemini models: CCS auto-adds [1m] when supported'],
+    ['', 'Claude models: plain by default, opt-in with --1m or saved [1m]'],
     ['', ''],
-    ['Note:', 'Extended context enables 1M token window via [1m] suffix.'],
-    ['', 'Premium pricing: 2x input for >200K tokens.'],
+    ['Note:', 'CCS only controls the saved [1m] suffix.'],
+    ['', 'Provider pricing and entitlement stay upstream.'],
+    ['', 'Some accounts/providers can still return 429 extra-usage errors for long-context requests.'],
   ]);
 
   // Image Analysis

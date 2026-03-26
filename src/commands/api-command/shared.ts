@@ -1,4 +1,12 @@
+import type { ModelMapping } from '../../api/services';
 import type { TargetType } from '../../targets/target-adapter';
+import {
+  applyExtendedContextSuffix,
+  hasExtendedContextSuffix,
+  isClaudeModelId,
+  likelySupportsClaudeExtendedContext,
+  stripExtendedContextSuffix,
+} from '../../shared/extended-context-utils';
 import { fail } from '../../utils/ui';
 import { extractOption, hasAnyFlag, scanCommandArgs } from '../arg-extractor';
 
@@ -11,12 +19,15 @@ export interface ApiCommandArgs {
   preset?: string;
   cliproxyProvider?: string;
   target?: TargetType;
+  extendedContext?: boolean;
   force?: boolean;
   yes?: boolean;
   errors: string[];
 }
 
-export const API_BOOLEAN_FLAGS = ['--force', '--yes', '-y'] as const;
+const MODEL_MAPPING_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
+
+export const API_BOOLEAN_FLAGS = ['--force', '--yes', '-y', '--1m', '--no-1m'] as const;
 export const API_VALUE_FLAGS = [
   '--base-url',
   '--api-key',
@@ -155,12 +166,22 @@ export function parseApiCommandArgs(
   args: string[],
   options: ParseApiCommandArgsOptions = {}
 ): ApiCommandArgs {
+  const enableExtendedContext = hasAnyFlag(args, ['--1m']);
+  const disableExtendedContext = hasAnyFlag(args, ['--no-1m']);
   const result: ApiCommandArgs = {
     positionals: [],
     force: hasAnyFlag(args, ['--force']),
     yes: hasAnyFlag(args, ['--yes', '-y']),
     errors: [],
   };
+
+  if (enableExtendedContext && disableExtendedContext) {
+    result.errors.push('Cannot combine --1m and --no-1m');
+  } else if (enableExtendedContext) {
+    result.extendedContext = true;
+  } else if (disableExtendedContext) {
+    result.extendedContext = false;
+  }
 
   let remaining = [...args];
 
@@ -249,6 +270,36 @@ export function parseApiCommandArgs(
   result.name = unexpected.positionals[0];
   result.errors.push(...unexpected.errors);
   return result;
+}
+
+export function hasClaudeModelMapping(models: ModelMapping): boolean {
+  return MODEL_MAPPING_KEYS.some((key) => isClaudeModelId(models[key]));
+}
+
+export function hasExplicitClaudeExtendedContext(models: ModelMapping): boolean {
+  return MODEL_MAPPING_KEYS.some(
+    (key) => isClaudeModelId(models[key]) && hasExtendedContextSuffix(models[key])
+  );
+}
+
+export function applyClaudeExtendedContextPreference(
+  models: ModelMapping,
+  enabled: boolean
+): ModelMapping {
+  const nextModels = { ...models };
+
+  for (const key of MODEL_MAPPING_KEYS) {
+    const value = nextModels[key];
+    if (!isClaudeModelId(value)) {
+      continue;
+    }
+
+    nextModels[key] = enabled && likelySupportsClaudeExtendedContext(value)
+      ? applyExtendedContextSuffix(value)
+      : stripExtendedContextSuffix(value);
+  }
+
+  return nextModels;
 }
 
 export function exitOnApiCommandErrors(errors: string[]): void {
