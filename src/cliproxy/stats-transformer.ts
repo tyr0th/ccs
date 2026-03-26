@@ -13,7 +13,7 @@ interface BuildCliproxyStatsOptions {
 }
 
 interface ResolvedAuthFile {
-  provider: string;
+  provider?: string;
   source?: string;
 }
 
@@ -32,13 +32,19 @@ function buildAuthIndexLookup(
   const lookup = new Map<string, ResolvedAuthFile>();
 
   for (const authFile of authFiles ?? []) {
-    if (authFile.auth_index === undefined || authFile.auth_index === null || !authFile.provider) {
+    if (authFile.auth_index === undefined || authFile.auth_index === null) {
+      continue;
+    }
+
+    const provider = authFile.provider ? normalizeProvider(authFile.provider) : undefined;
+    const source = authFile.email?.trim() || authFile.name?.trim() || undefined;
+    if (!provider && !source) {
       continue;
     }
 
     lookup.set(String(authFile.auth_index), {
-      provider: normalizeProvider(authFile.provider),
-      source: authFile.email?.trim() || authFile.name?.trim() || undefined,
+      provider,
+      source,
     });
   }
 
