@@ -1,6 +1,6 @@
 # WebSearch Configuration Guide
 
-Last Updated: 2026-03-23
+Last Updated: 2026-03-27
 
 CCS provides automatic web search for third-party profiles that cannot access Anthropic's native WebSearch API.
 
@@ -64,7 +64,8 @@ The new flow matches the `goclaw` model more closely: web search is treated as a
 Open `ccs config` → `Settings` → `WebSearch`.
 
 - Enable Exa, Tavily, Brave, or DuckDuckGo in the backend chain
-- Export the matching API key first for Exa, Tavily, or Brave
+- Set or rotate Exa, Tavily, and Brave API keys directly inside each provider card
+- Saved keys are persisted in `global_env` and injected at runtime, so readiness updates from the same screen
 - Review whether any legacy fallback CLIs are still enabled in config
 
 ### Via Config File
@@ -119,7 +120,7 @@ That is expected. DuckDuckGo is the default zero-setup backend.
 
 ### Exa, Tavily, or Brave is enabled but not ready
 
-Export the matching API key in the environment that launches CCS, then refresh status:
+Set the matching API key in the WebSearch dashboard card, or export it in the environment that launches CCS, then refresh status:
 
 ```bash
 export EXA_API_KEY="your-api-key"
@@ -127,6 +128,8 @@ export EXA_API_KEY="your-api-key"
 # or: export BRAVE_API_KEY="your-api-key"
 ccs config
 ```
+
+If the dashboard says the key is stored but still not ready, check whether `Settings -> Global Env` is disabled. WebSearch reuses that injection path for dashboard-managed keys.
 
 ### I still want Gemini/OpenCode/Grok fallback
 
@@ -141,6 +144,7 @@ Those providers remain supported, but they are no longer the primary path. Enabl
 
 ## Security Considerations
 
-- API keys stay in environment variables, not in dashboard state
+- API keys entered from the dashboard are stored in `~/.ccs/config.yaml` under `global_env` and injected as environment variables at runtime
+- Shell-exported keys still work and are detected as external environment input
 - Never commit API keys to version control
-- Use shell profile or `.env` tooling with proper permissions
+- Use the dashboard only on trusted machines, and protect `~/.ccs/config.yaml` with normal user-level filesystem permissions
