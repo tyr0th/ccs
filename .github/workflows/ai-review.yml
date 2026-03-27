@@ -127,7 +127,7 @@ jobs:
     name: Claude Code Review
     needs: prepare
     if: needs.prepare.result == 'success'
-    timeout-minutes: 20
+    timeout-minutes: 15
     runs-on: ${{ fromJSON(needs.prepare.outputs.runs_on) }}
     permissions:
       contents: read
@@ -147,7 +147,7 @@ jobs:
       DISABLE_ERROR_REPORTING: '1'
       DISABLE_TELEMETRY: '1'
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000'
-      MAX_THINKING_TOKENS: '32000'
+      MAX_THINKING_TOKENS: '16000'
       REVIEW_OUTPUT_FILE: pr_review.md
       REVIEW_COMMENT_FILE: .ccs-ai-review-comment.md
 
@@ -226,7 +226,7 @@ jobs:
           show_full_output: true # Visible logs for debugging slow/failing reviews
           track_progress: false # Disabled - no progress comments, just final review
           prompt: |
-            ultrathink
+            think
 
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ needs.prepare.outputs.pr_number }}
@@ -257,7 +257,9 @@ jobs:
           claude_args: |
             --bare
             --model ${{ env.REVIEW_MODEL }}
-            --allowedTools "Edit,Glob,Grep,LS,Read,Write,Bash(gh pr diff *),Bash(gh pr view *),Bash(gh issue view *),Bash(git diff *),Bash(git log *),Bash(git status *),Bash(cat *),Bash(ls *)"
+            --permission-mode bypassPermissions
+            --max-turns 20
+            --allowedTools "Glob,Grep,Read,Write,Bash(gh pr diff *),Bash(gh pr view *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(cat *),Bash(ls *),Bash(wc *),Bash(head *),Bash(tail *),Bash(find *)"
 
       # Fallback: if Claude didn't write the review file, extract from execution output
       - name: Extract review from execution output (fallback)
