@@ -50,6 +50,110 @@ CLI wrapper for instant switching between multiple provider accounts and alterna
 | Forgetting `--help` update | CLI docs out of sync | Update `src/commands/help-command.ts` |
 | Forgetting docs update | User docs out of sync | Update `docs/` and CCS docs submodule |
 
+## GitHub Issue Operations (CCS-Specific)
+
+These rules apply when the task is issue triage, backlog cleanup, labels, comments, Projects, or milestones for this repo.
+
+### Scope Boundary
+
+- Treat issue triage as a **GitHub-only workflow** unless the user explicitly asks for implementation.
+- Do **NOT** create a worktree, branch, PR, or run `/fix`, `/cook`, or `kai:maintainer` just to tag issues, post follow-up comments, close duplicates, or clean up backlog state.
+- Escalate into code workflow only when:
+  - the user explicitly asks to fix/implement an issue, or
+  - triage proves the same task now requires code changes.
+
+### Read Before Mutating
+
+- Always inspect live issue state first with `gh issue view <n> --json ...` or `gh api`.
+- Never rely on stale memory, screenshots, or issue titles alone.
+- Before closing as resolved, cross-check repo evidence in at least one of:
+  - `README.md`
+  - `docs/`
+  - `CHANGELOG.md`
+  - relevant source/help handlers
+- If the `gh` query would touch Projects fields, verify token scope first. Missing `read:project` is a real blocker, not something to hand-wave around.
+
+### Labeling Standard
+
+- Every **open** issue should end triage with:
+  - one primary type label: `bug`, `enhancement`, `question`, `documentation`, `duplicate`, `invalid`, or `wontfix`
+  - one area label:
+    - `area:cli-runtime`
+    - `area:dashboard-ui`
+    - `area:config-auth`
+    - `area:provider-integration`
+    - `area:install-packaging`
+    - `area:documentation`
+    - `area:contributor-workflow`
+- Add routing labels only when they materially change handling:
+  - `upstream-blocked`
+  - `needs-repro`
+  - `needs-split`
+  - `docs-gap`
+- Use release-state labels for shipped work:
+  - `pending-release`
+  - `released-dev`
+  - `released`
+- Do **NOT** create or use status labels like `todo`, `doing`, `blocked`, `done`.
+- Do **NOT** create provider-name labels unless there is a proven long-term need. Provider names belong in titles/issues, not label spam.
+
+### Commenting Rules
+
+- Keep issue comments short, technical, and neutral.
+- State the decision plainly: close, keep open, retag, needs repro, duplicate, blocked upstream.
+- Include exact evidence when relevant: version, doc path, changelog release, canonical issue, upstream link.
+- Do **NOT** reference internal plans, local report files, agent prompts, or private reasoning.
+- Post **one** maintainer follow-up comment per triage pass. If accidental duplicates are created, delete them with `gh api repos/<owner>/<repo>/issues/comments/<id> -X DELETE`.
+
+### Closure Rules
+
+- Close immediately when:
+  - the issue is an obvious duplicate and you can point to the canonical issue
+  - the feature/fix is clearly shipped and documented
+  - a previously `pending-release` issue is now clearly past release and no longer needs tracking
+- Keep open and retag when:
+  - upstream dependency still blocks CCS adoption -> `upstream-blocked`
+  - latest-release behavior is unclear -> `needs-repro`
+  - issue contains multiple independent asks -> `needs-split`
+  - feature likely exists but discoverability/docs are weak -> `docs-gap`
+- Do **NOT** close just because an issue is old, vague, or inconvenient. Close only with evidence.
+
+### Projects And Milestones
+
+- Preferred project model for this repo: one project, `CCS Backlog`.
+- Use Projects for workflow state and priority. Use labels for meaning and routing.
+- Milestones are for real ship windows only, not generic categorization buckets.
+- If `gh` token lacks `read:project`, say so explicitly and stop short of pretending Projects data is available.
+- Active project:
+  - owner: `kaitranntt`
+  - number: `3`
+  - URL: `https://github.com/users/kaitranntt/projects/3`
+- Active project fields:
+  - `Status` -> use for work state (`Todo`, `In Progress`, `Done`)
+  - `Priority` -> `P1` for bugs, `P2` default backlog, `P3` for broad `needs-split` buckets unless explicitly reprioritized
+  - `Follow-up` -> `Ready`, `Needs repro`, `Blocked upstream`, `Needs split`, `Docs follow-up`
+  - `Next review` -> date only for issues that need a follow-up checkpoint
+- When triaging an open issue, make sure it exists in `CCS Backlog` and the project fields match the routing labels.
+- Do **NOT** create a second backlog project unless the user explicitly wants a project split and gives a reason.
+- Current automation path:
+  - workflow file: `.github/workflows/sync-ccs-backlog-project.yml`
+  - sync script: `scripts/github/ccs-backlog-sync.mjs`
+  - required Actions secret: `CCS_PROJECT_AUTOMATION_TOKEN`
+- Automation mapping must stay aligned with labels:
+  - `upstream-blocked` -> `Follow-up=Blocked upstream`
+  - `needs-repro` -> `Follow-up=Needs repro`
+  - `needs-split` -> `Follow-up=Needs split`
+  - `docs-gap` -> `Follow-up=Docs follow-up`
+  - otherwise -> `Follow-up=Ready`
+
+### New Or Updated Issue Creation
+
+- When creating issues for this repo:
+  - assign `@kaitranntt`
+  - use conventional issue titles: `bug: ...`, `feat: ...`, `docs: ...`
+  - keep bodies factual and technical
+  - avoid personal info and internal-only context
+
 ## Quality Gates (MANDATORY)
 
 Quality gates MUST pass before pushing. **Both projects have identical workflow.**
