@@ -35,6 +35,7 @@
     "lib/",
     "scripts/",
     "config/",
+    "docker/",
     ".claude/",
     "VERSION",
     "README.md",

@@ -12,9 +12,10 @@ docs/
 .gitignore
 .gitmodules
 
-# Development tools (keep installer scripts)
+# Development tools (keep installer scripts and docker entrypoints)
 *.sh
 !installers/*.sh
+!docker/*.sh
 
 # Logs and temp
 *.log
