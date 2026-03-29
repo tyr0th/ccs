@@ -82,6 +82,7 @@ const BUILT_IN_GEMINI_ALIAS_NAMES = new Set(
   )
 );
 const MIN_STALE_GUESSED_GEMINI_MINOR_VERSIONS = 2;
+const MIN_STALE_HIGH_ONLY_GEMINI_MINOR_VERSIONS = 3;
 const MIN_STALE_GUESSED_GEMINI_AVERAGE_VARIANTS_PER_MINOR = 2;
 const LEGACY_GEMINI_STALE_ALIAS_MIGRATION_VERSION = 16;
 const MAX_LEGACY_MANUAL_GEMINI_MINOR_VERSION = 2;
@@ -399,7 +400,14 @@ function buildLegacyGeneratedGeminiAliasPruneSet(
     const totalAliasCount = sortedMinorVersions.reduce((total, minorVersion) => {
       return total + (aliasKeysByMinor.get(minorVersion)?.length ?? 0);
     }, 0);
-    if (sortedMinorVersions.length < MIN_STALE_GUESSED_GEMINI_MINOR_VERSIONS) {
+    const preservedMinorVersion =
+      Number(sortedMinorVersions[0]) <= MAX_LEGACY_MANUAL_GEMINI_MINOR_VERSION
+        ? sortedMinorVersions[0]
+        : null;
+    const minimumMinorVersionsToPrune = preservedMinorVersion
+      ? MIN_STALE_GUESSED_GEMINI_MINOR_VERSIONS
+      : MIN_STALE_HIGH_ONLY_GEMINI_MINOR_VERSIONS;
+    if (sortedMinorVersions.length < minimumMinorVersionsToPrune) {
       continue;
     }
     if (
@@ -409,10 +417,6 @@ function buildLegacyGeneratedGeminiAliasPruneSet(
       continue;
     }
 
-    const preservedMinorVersion =
-      Number(sortedMinorVersions[0]) <= MAX_LEGACY_MANUAL_GEMINI_MINOR_VERSION
-        ? sortedMinorVersions[0]
-        : null;
     for (const minorVersion of sortedMinorVersions) {
       if (minorVersion === preservedMinorVersion) {
         continue;
