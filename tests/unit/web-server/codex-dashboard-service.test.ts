@@ -218,6 +218,22 @@ model = "gpt-5.4"
     expect(diagnostics.supportMatrix.some((entry) => entry.id === 'default')).toBe(true);
   });
 
+  it('warns when the active model provider is selected without base_url or env_key', async () => {
+    fs.writeFileSync(
+      path.join(codexHome, 'config.toml'),
+      `model_provider = "cliproxy"
+
+[model_providers.cliproxy]
+wire_api = "responses"
+`
+    );
+
+    const diagnostics = await getCodexDashboardDiagnostics();
+
+    expect(diagnostics.warnings.some((warning) => warning.includes('missing base_url'))).toBe(true);
+    expect(diagnostics.warnings.some((warning) => warning.includes('missing env_key'))).toBe(true);
+  });
+
   it('summarizes granular approval policies without flattening them to null', async () => {
     fs.writeFileSync(
       path.join(codexHome, 'config.toml'),

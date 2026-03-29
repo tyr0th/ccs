@@ -702,6 +702,7 @@ export async function getCodexDashboardDiagnostics(): Promise<CodexDashboardDiag
     ? Object.keys(config).sort((left, right) => left.localeCompare(right))
     : [];
   const activeProfile = asString(config?.profile);
+  const activeModelProvider = asString(config?.model_provider);
   const profileNames = Object.keys(asObject(config?.profiles) ?? {}).sort((left, right) =>
     left.localeCompare(right)
   );
@@ -725,6 +726,21 @@ export async function getCodexDashboardDiagnostics(): Promise<CodexDashboardDiag
   }
   if (activeProfile && !profileNames.includes(activeProfile)) {
     warnings.push(`Active profile "${activeProfile}" is selected but missing from [profiles].`);
+  }
+  if (activeModelProvider) {
+    const activeProvider = modelProviders.find((provider) => provider.name === activeModelProvider);
+    if (!activeProvider) {
+      warnings.push(
+        `Active model provider "${activeModelProvider}" is selected but missing from [model_providers].`
+      );
+    } else {
+      if (!activeProvider.baseUrl) {
+        warnings.push(`Active model provider "${activeProvider.name}" is missing base_url.`);
+      }
+      if (!activeProvider.envKey) {
+        warnings.push(`Active model provider "${activeProvider.name}" is missing env_key.`);
+      }
+    }
   }
   if (modelProviders.some((provider) => provider.usesExperimentalBearerToken)) {
     warnings.push(

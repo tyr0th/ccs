@@ -92,16 +92,12 @@ export function ProviderInfoTab({
             {isCodexProvider && (
               <>
                 <UsageCommand
+                  label="Run on native Codex (shortcut)"
+                  command={`ccsxp "your prompt"`}
+                />
+                <UsageCommand
                   label="Run on native Codex (--target)"
                   command={`ccs ${provider} --target codex "your prompt"`}
-                />
-                <UsageCommand
-                  label="Codex alias (explicit)"
-                  command={`ccs-codex ${provider} "your prompt"`}
-                />
-                <UsageCommand
-                  label="Codex alias (short)"
-                  command={`ccsx ${provider} "your prompt"`}
                 />
               </>
             )}

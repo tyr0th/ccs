@@ -44,6 +44,13 @@ const DEFAULT_PROVIDER_DOCS: CompatibleCliProviderDocLink[] = [
   },
 ];
 
+const CLIPROXY_NATIVE_CODEX_RECIPE = `model_provider = "cliproxy"
+
+[model_providers.cliproxy]
+base_url = "http://127.0.0.1:8317/api/provider/codex"
+env_key = "CLIPROXY_API_KEY"
+wire_api = "responses"`;
+
 function renderTextWithLinks(text: string): ReactNode[] {
   const urlPattern = /https?:\/\/[^\s)]+/g;
   const nodes: ReactNode[] = [];
@@ -98,6 +105,36 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 pr-1">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldCheck className="h-4 w-4" />
+              CCS bridge recipe
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Use <code>ccsxp</code> if you want the built-in CCS Codex provider shortcut on native
+              Codex. Use the saved recipe below if you want plain <code>codex</code> or a personal
+              alias like <code>cxp</code> to default to CLIProxy.
+            </p>
+            <pre className="overflow-x-auto rounded-md border bg-muted/20 p-3 text-xs text-foreground">
+              {CLIPROXY_NATIVE_CODEX_RECIPE}
+            </pre>
+            <div className="space-y-1">
+              <p>
+                1. Save the <code>cliproxy</code> provider in your user config.
+              </p>
+              <p>
+                2. Set top-level <code>model_provider</code> to <code>cliproxy</code>.
+              </p>
+              <p>
+                3. Export <code>CLIPROXY_API_KEY</code> in your shell before launching native Codex.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
