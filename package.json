@@ -88,7 +88,6 @@
     "ui:build": "cd ui && bun run build",
     "ui:preview": "cd ui && bun run preview",
     "ui:validate": "cd ui && bun run validate",
-    "prepack": "bun run build:all",
     "prepare": "husky",
     "postinstall": "node scripts/postinstall.js"
   },
