@@ -2,7 +2,11 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'bun:test';
-import { buildClaudeEnvironment } from '../../../src/cliproxy/executor/env-resolver';
+import {
+  buildClaudeEnvironment,
+  resolveCliproxyImageAnalysisEnv,
+} from '../../../src/cliproxy/executor/env-resolver';
+import type { ImageAnalysisStatus } from '../../../src/utils/hooks';
 
 const tempDirs: string[] = [];
 
@@ -35,6 +39,37 @@ function createCodexSettingsFile(models: {
   );
 
   return settingsPath;
+}
+
+function createImageAnalysisStatus(
+  overrides: Partial<ImageAnalysisStatus> = {}
+): ImageAnalysisStatus {
+  return {
+    enabled: true,
+    supported: true,
+    status: 'active',
+    backendId: 'agy',
+    backendDisplayName: 'Antigravity',
+    model: 'gemini-2.5-pro',
+    resolutionSource: 'cliproxy-provider',
+    reason: null,
+    shouldPersistHook: true,
+    persistencePath: '/tmp/orq.settings.json',
+    runtimePath: '/api/provider/agy',
+    usesCurrentTarget: true,
+    usesCurrentAuthToken: true,
+    hookInstalled: true,
+    sharedHookInstalled: true,
+    authReadiness: 'ready',
+    authProvider: 'agy',
+    authDisplayName: 'Antigravity',
+    authReason: null,
+    proxyReadiness: 'ready',
+    proxyReason: 'Local CLIProxy service is reachable.',
+    effectiveRuntimeMode: 'cliproxy-image-analysis',
+    effectiveRuntimeReason: null,
+    ...overrides,
+  };
 }
 
 describe('buildClaudeEnvironment codex fallback normalization', () => {
@@ -111,5 +146,118 @@ describe('buildClaudeEnvironment codex fallback normalization', () => {
     });
 
     expect(env.CLAUDE_CONFIG_DIR).toBe('/tmp/.ccs/instances/pro');
+  });
+
+  it('uses an execution-aware image analysis env override when provided', () => {
+    const env = buildClaudeEnvironment({
+      provider: 'agy',
+      useRemoteProxy: false,
+      localPort: 8317,
+      verbose: false,
+      imageAnalysisEnv: {
+        CCS_IMAGE_ANALYSIS_ENABLED: '1',
+        CCS_IMAGE_ANALYSIS_TIMEOUT: '60',
+        CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: 'agy:gemini-2.5-pro',
+        CCS_CURRENT_PROVIDER: '',
+        CCS_IMAGE_ANALYSIS_SKIP: '1',
+      },
+    });
+
+    expect(env.CCS_CURRENT_PROVIDER).toBe('');
+    expect(env.CCS_IMAGE_ANALYSIS_SKIP).toBe('1');
+  });
+});
+
+describe('resolveCliproxyImageAnalysisEnv', () => {
+  it('falls back to native read when runtime status is not launchable', async () => {
+    const result = await resolveCliproxyImageAnalysisEnv(
+      {
+        profileName: 'orq',
+        provider: 'agy',
+        profileSettingsPath: '/tmp/orq.settings.json',
+        proxyTarget: {
+          host: '127.0.0.1',
+          port: 8317,
+          protocol: 'http',
+          isRemote: false,
+        },
+        proxyReachable: true,
+      },
+      {
+        getImageAnalysisHookEnv: () => ({
+          CCS_IMAGE_ANALYSIS_ENABLED: '1',
+          CCS_IMAGE_ANALYSIS_TIMEOUT: '60',
+          CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: 'agy:gemini-2.5-pro',
+          CCS_CURRENT_PROVIDER: 'agy',
+          CCS_IMAGE_ANALYSIS_SKIP: '0',
+        }),
+        hasImageAnalysisProfileHook: () => true,
+        hasImageAnalyzerHook: () => true,
+        resolveImageAnalysisRuntimeStatus: async (context, _config, deps) => {
+          expect(context.profileName).toBe('orq');
+          expect(context.cliproxyProvider).toBe('agy');
+          expect(context.hookInstalled).toBe(true);
+          expect(context.sharedHookInstalled).toBe(true);
+          expect(deps?.getProxyTarget?.().isRemote).toBe(false);
+          return createImageAnalysisStatus({
+            authReadiness: 'missing',
+            authReason: 'Antigravity auth is missing.',
+            effectiveRuntimeMode: 'native-read',
+            effectiveRuntimeReason: 'Antigravity auth is missing.',
+          });
+        },
+      }
+    );
+
+    expect(result.env.CCS_CURRENT_PROVIDER).toBe('');
+    expect(result.env.CCS_IMAGE_ANALYSIS_SKIP).toBe('1');
+    expect(result.warning).toContain('Antigravity auth is missing.');
+    expect(result.warning).toContain('native Read');
+  });
+
+  it('keeps cliproxy image analysis active when the execution target is reachable', async () => {
+    const result = await resolveCliproxyImageAnalysisEnv(
+      {
+        profileName: 'orq',
+        provider: 'agy',
+        isComposite: true,
+        proxyTarget: {
+          host: 'remote.example.com',
+          port: 9443,
+          protocol: 'https',
+          authToken: 'remote-token',
+          managementKey: 'remote-management-key',
+          allowSelfSigned: true,
+          isRemote: true,
+        },
+        proxyReachable: true,
+      },
+      {
+        getImageAnalysisHookEnv: () => ({
+          CCS_IMAGE_ANALYSIS_ENABLED: '1',
+          CCS_IMAGE_ANALYSIS_TIMEOUT: '60',
+          CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: 'agy:gemini-2.5-pro',
+          CCS_CURRENT_PROVIDER: 'agy',
+          CCS_IMAGE_ANALYSIS_SKIP: '0',
+        }),
+        hasImageAnalysisProfileHook: () => true,
+        hasImageAnalyzerHook: () => true,
+        resolveImageAnalysisRuntimeStatus: async (context, _config, deps) => {
+          expect(context.isComposite).toBe(true);
+          expect(deps?.getProxyTarget?.().host).toBe('remote.example.com');
+          expect(deps?.getProxyTarget?.().managementKey).toBe('remote-management-key');
+          expect(deps?.getProxyTarget?.().allowSelfSigned).toBe(true);
+          return createImageAnalysisStatus({
+            resolutionSource: 'cliproxy-composite',
+            proxyReadiness: 'remote',
+            proxyReason: 'Remote CLIProxy target remote.example.com:9443 is reachable.',
+          });
+        },
+      }
+    );
+
+    expect(result.env.CCS_CURRENT_PROVIDER).toBe('agy');
+    expect(result.env.CCS_IMAGE_ANALYSIS_SKIP).toBe('0');
+    expect(result.warning).toBeNull();
   });
 });

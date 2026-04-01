@@ -99,7 +99,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // Types
-export type CliTarget = 'claude' | 'droid';
+export type CliTarget = 'claude' | 'droid' | 'codex';
 
 export interface CliproxyBridgeMetadata {
   provider: CLIProxyProvider;
@@ -109,6 +109,126 @@ export interface CliproxyBridgeMetadata {
   source: 'local' | 'remote';
   usesCurrentTarget: boolean;
   usesCurrentAuthToken: boolean;
+}
+
+export interface ImageAnalysisStatus {
+  enabled: boolean;
+  supported: boolean;
+  status: 'active' | 'mapped' | 'attention' | 'disabled' | 'skipped' | 'hook-missing';
+  backendId: string | null;
+  backendDisplayName: string | null;
+  model: string | null;
+  resolutionSource:
+    | 'cliproxy-provider'
+    | 'cliproxy-variant'
+    | 'cliproxy-composite'
+    | 'copilot-alias'
+    | 'cliproxy-bridge'
+    | 'profile-backend'
+    | 'fallback-backend'
+    | 'native-compatible'
+    | 'disabled'
+    | 'unsupported-profile'
+    | 'unresolved'
+    | 'missing-model';
+  reason: string | null;
+  shouldPersistHook: boolean;
+  persistencePath: string | null;
+  runtimePath: string | null;
+  usesCurrentTarget: boolean | null;
+  usesCurrentAuthToken: boolean | null;
+  hookInstalled: boolean | null;
+  sharedHookInstalled: boolean | null;
+  authReadiness: 'not-needed' | 'ready' | 'missing' | 'unknown';
+  authProvider: string | null;
+  authDisplayName: string | null;
+  authReason: string | null;
+  proxyReadiness: 'not-needed' | 'ready' | 'remote' | 'stopped' | 'unavailable' | 'unknown';
+  proxyReason: string | null;
+  effectiveRuntimeMode: 'cliproxy-image-analysis' | 'native-read';
+  effectiveRuntimeReason: string | null;
+  profileModel: string | null;
+  nativeReadPreference: boolean;
+  nativeImageCapable: boolean | null;
+  nativeImageReason: string | null;
+}
+
+export interface ImageAnalysisSettingsConfig {
+  enabled: boolean;
+  timeout: number;
+  providerModels: Record<string, string>;
+  fallbackBackend: string | null;
+  profileBackends: Record<string, string>;
+}
+
+export interface ImageAnalysisDashboardSummary {
+  state: 'ready' | 'partial' | 'needs_setup' | 'disabled';
+  title: string;
+  detail: string;
+  backendCount: number;
+  mappedProfileCount: number;
+  activeProfileCount: number;
+  bypassedProfileCount: number;
+  nativeProfileCount: number;
+}
+
+export interface ImageAnalysisDashboardBackend {
+  backendId: string;
+  displayName: string;
+  model: string;
+  state: 'ready' | 'starts_on_launch' | 'needs_auth' | 'needs_proxy' | 'review';
+  authReadiness: ImageAnalysisStatus['authReadiness'];
+  authReason: string | null;
+  proxyReadiness: ImageAnalysisStatus['proxyReadiness'];
+  proxyReason: string | null;
+  profilesUsing: number;
+}
+
+export interface ImageAnalysisDashboardProfile {
+  name: string;
+  kind: 'profile' | 'variant';
+  target: CliTarget;
+  configured: boolean;
+  settingsPath: string | null;
+  backendId: string | null;
+  backendDisplayName: string | null;
+  resolutionSource: ImageAnalysisStatus['resolutionSource'];
+  status: ImageAnalysisStatus['status'];
+  effectiveRuntimeMode: ImageAnalysisStatus['effectiveRuntimeMode'];
+  effectiveRuntimeReason: string | null;
+  currentTargetMode:
+    | 'active'
+    | 'bypassed'
+    | 'fallback'
+    | 'setup'
+    | 'disabled'
+    | 'native'
+    | 'unresolved';
+  profileModel: string | null;
+  nativeReadPreference: boolean;
+  nativeImageCapable: boolean | null;
+  nativeImageReason: string | null;
+}
+
+export interface ImageAnalysisDashboardCatalog {
+  knownBackends: string[];
+  profileNames: string[];
+}
+
+export interface ImageAnalysisDashboardData {
+  config: ImageAnalysisSettingsConfig;
+  summary: ImageAnalysisDashboardSummary;
+  backends: ImageAnalysisDashboardBackend[];
+  profiles: ImageAnalysisDashboardProfile[];
+  catalog: ImageAnalysisDashboardCatalog;
+}
+
+export interface UpdateImageAnalysisSettingsPayload {
+  enabled?: boolean;
+  timeout?: number;
+  providerModels?: Record<string, string | null>;
+  fallbackBackend?: string | null;
+  profileBackends?: Record<string, string>;
 }
 
 export interface Profile {
@@ -803,6 +923,14 @@ export const api = {
     import: (data: ImportProfileRequest) =>
       request<ImportProfileResponse>('/profiles/import', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+  imageAnalysis: {
+    get: () => request<ImageAnalysisDashboardData>('/image-analysis'),
+    update: (data: UpdateImageAnalysisSettingsPayload) =>
+      request<ImageAnalysisDashboardData>('/image-analysis', {
+        method: 'PUT',
         body: JSON.stringify(data),
       }),
   },

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import type { AddressInfo } from 'net';
 
 import { startServer } from '../../../src/web-server';
@@ -15,6 +15,8 @@ afterEach(async () => {
     instance.cleanup();
     await new Promise<void>((resolve) => instance.server.close(() => resolve()));
   }
+
+  mock.restore();
 });
 
 describe('startServer host binding', () => {
@@ -40,5 +42,28 @@ describe('startServer host binding', () => {
 
     const address = instance.server.address() as AddressInfo;
     expect(['0.0.0.0', '::']).toContain(address.address);
+  });
+
+  it('attaches Vite HMR to the existing HTTP server in dev mode', async () => {
+    let viteConfig: Record<string, unknown> | undefined;
+
+    mock.module('vite', () => ({
+      createServer: async (config: Record<string, unknown>) => {
+        viteConfig = config;
+        return {
+          middlewares: (_req: unknown, _res: unknown, next: () => void) => next(),
+        };
+      },
+    }));
+
+    const instance = await startServer({ port: 0, dev: true });
+    instances.push(instance);
+
+    expect(viteConfig).toBeDefined();
+    const serverConfig = viteConfig?.server as
+      | { middlewareMode?: boolean; hmr?: { server?: unknown } }
+      | undefined;
+    expect(serverConfig?.middlewareMode).toBe(true);
+    expect(serverConfig?.hmr?.server).toBe(instance.server);
   });
 });

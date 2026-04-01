@@ -282,6 +282,18 @@ describe('proxy-config-resolver', () => {
         expect(config.host).toBe('yaml-host.example.com');
       });
 
+      it('should preserve YAML management key for remote mode', () => {
+        const { config } = resolveProxyConfig([], {
+          remote: {
+            host: 'yaml-host.example.com',
+            auth_token: 'remote-auth-token',
+            management_key: 'remote-management-key',
+          },
+        });
+        expect(config.mode).toBe('remote');
+        expect(config.managementKey).toBe('remote-management-key');
+      });
+
       it('should allow CLI --proxy-host to override YAML enabled:false', () => {
         const { config } = resolveProxyConfig(['--proxy-host', 'cli-host'], {
           remote: { enabled: false, host: 'yaml-host' },

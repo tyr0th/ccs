@@ -4,7 +4,7 @@
  * Injects image analyzer hooks into per-profile settings files.
  * This replaces the global ~/.claude/settings.json approach.
  *
- * Injects for profiles configured in image_analysis.provider_models.
+ * Injects for profiles that resolve to a supported image-analysis backend.
  *
  * @module utils/hooks/image-analyzer-profile-injector
  */
@@ -18,9 +18,13 @@ import {
 } from './image-analyzer-hook-configuration';
 import { getImageAnalysisConfig } from '../../config/unified-config-loader';
 import { getCcsDir } from '../config-manager';
+import {
+  resolveImageAnalysisStatus,
+  type ImageAnalysisResolutionContext,
+} from './image-analysis-backend-resolver';
 
-// Valid profile name pattern (alphanumeric, dash, underscore only)
-const VALID_PROFILE_NAME = /^[a-zA-Z0-9_-]+$/;
+// Valid profile name pattern (alphanumeric, dot, dash, underscore only)
+const VALID_PROFILE_NAME = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 
 /**
  * Get migration marker path (respects CCS_HOME for test isolation)
@@ -51,6 +55,39 @@ function hasCcsHook(settings: Record<string, unknown>): boolean {
   });
 }
 
+export function getImageAnalysisProfileSettingsPath(
+  profileName: string,
+  settingsPath?: string | null
+): string {
+  if (typeof settingsPath === 'string' && settingsPath.trim().length > 0) {
+    return settingsPath;
+  }
+
+  return path.join(getCcsDir(), `${profileName}.settings.json`);
+}
+
+export function hasImageAnalysisProfileHook(
+  profileName: string,
+  settingsPath?: string | null
+): boolean {
+  if (!VALID_PROFILE_NAME.test(profileName)) {
+    return false;
+  }
+
+  const resolvedSettingsPath = getImageAnalysisProfileSettingsPath(profileName, settingsPath);
+  if (!fs.existsSync(resolvedSettingsPath)) {
+    return false;
+  }
+
+  try {
+    const content = fs.readFileSync(resolvedSettingsPath, 'utf8');
+    const settings = JSON.parse(content) as Record<string, unknown>;
+    return hasCcsHook(settings);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * One-time migration marker management
  */
@@ -79,13 +116,14 @@ function migrateGlobalHook(): void {
 /**
  * Ensure image analyzer hook is configured in profile's settings file
  *
- * Only injects for CLIProxy profiles with vision support (agy, gemini).
- *
- * @param profileName - Name of the profile (e.g., 'agy', 'gemini')
+ * @param input - Profile name or pre-resolved runtime context
  * @returns true if hook is configured (existing or newly added)
  */
-export function ensureProfileHooks(profileName: string): boolean {
+export function ensureProfileHooks(input: string | ImageAnalysisResolutionContext): boolean {
   try {
+    const context = typeof input === 'string' ? { profileName: input } : input;
+    const profileName = context.profileName;
+
     // Validate profile name to prevent path traversal
     if (!VALID_PROFILE_NAME.test(profileName)) {
       if (process.env.CCS_DEBUG) {
@@ -95,16 +133,8 @@ export function ensureProfileHooks(profileName: string): boolean {
     }
 
     const imageConfig = getImageAnalysisConfig();
-
-    // Only inject for profiles that have a model mapping in provider_models
-    // This allows dynamic extension without hardcoding profile names
-    const configuredProviders = Object.keys(imageConfig.provider_models);
-    if (!configuredProviders.includes(profileName)) {
-      return false;
-    }
-
-    // Skip if image analysis is disabled
-    if (!imageConfig.enabled) {
+    const status = resolveImageAnalysisStatus(context, imageConfig);
+    if (!status.supported || !status.shouldPersistHook) {
       return false;
     }
 
@@ -119,7 +149,7 @@ export function ensureProfileHooks(profileName: string): boolean {
       fs.mkdirSync(ccsDir, { recursive: true, mode: 0o700 });
     }
 
-    const settingsPath = path.join(ccsDir, `${profileName}.settings.json`);
+    const settingsPath = getImageAnalysisProfileSettingsPath(profileName, context.settingsPath);
 
     // Read existing settings or create empty
     let settings: Record<string, unknown> = {};

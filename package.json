@@ -81,7 +81,7 @@
     "test:native": "bash tests/native/unix/edge-cases.sh",
     "test:e2e": "bun test tests/e2e/ --bail --timeout 60000",
     "report:hardening": "node scripts/hardening-inventory.js",
-    "dev": "bun run build:server && bun dist/ccs.js config --dev",
+    "dev": "bun run build:server && node dist/ccs.js config --dev",
     "dev:symlink": "bash scripts/dev-symlink.sh",
     "dev:unlink": "bash scripts/dev-symlink.sh --restore",
     "ui:build": "cd ui && bun run build",

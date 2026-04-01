@@ -44,6 +44,7 @@ import {
   normalizeOfficialChannelIds,
   resolveLegacyDiscordSelection,
 } from '../channels/official-channels-runtime';
+import { canonicalizeImageAnalysisConfig } from '../utils/hooks/image-analysis-backend-resolver';
 
 const CONFIG_YAML = 'config.yaml';
 const CONFIG_JSON = 'config.json';
@@ -556,12 +557,16 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         DEFAULT_DASHBOARD_AUTH_CONFIG.session_timeout_hours,
     },
     // Image analysis config - enabled by default for CLIProxy providers
-    image_analysis: {
+    image_analysis: canonicalizeImageAnalysisConfig({
       enabled: partial.image_analysis?.enabled ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled,
       timeout: partial.image_analysis?.timeout ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout,
       provider_models:
         partial.image_analysis?.provider_models ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models,
-    },
+      fallback_backend:
+        partial.image_analysis?.fallback_backend ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.fallback_backend,
+      profile_backends:
+        partial.image_analysis?.profile_backends ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.profile_backends,
+    }),
   };
 }
 
@@ -1267,12 +1272,16 @@ export function getDashboardAuthConfig(): DashboardAuthConfig {
 export function getImageAnalysisConfig(): ImageAnalysisConfig {
   const config = loadOrCreateUnifiedConfig();
 
-  return {
+  return canonicalizeImageAnalysisConfig({
     enabled: config.image_analysis?.enabled ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled,
     timeout: config.image_analysis?.timeout ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout,
     provider_models:
       config.image_analysis?.provider_models ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models,
-  };
+    fallback_backend:
+      config.image_analysis?.fallback_backend ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.fallback_backend,
+    profile_backends:
+      config.image_analysis?.profile_backends ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.profile_backends,
+  });
 }
 
 /**

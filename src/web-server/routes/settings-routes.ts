@@ -4,10 +4,9 @@
 
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import * as lockfile from 'proper-lockfile';
-import { getCcsDir, loadSettings } from '../../utils/config-manager';
+import { getCcsDir, loadConfigSafe, loadSettings } from '../../utils/config-manager';
 import { isSensitiveKey, maskSensitiveValue } from '../../utils/sensitive-keys';
 import { listVariants } from '../../cliproxy/services/variant-service';
 import {
@@ -21,17 +20,28 @@ import {
 import { regenerateConfig } from '../../cliproxy/config-generator';
 import { deduplicateCcsHooks } from '../../utils/websearch/hook-utils';
 import { resolveCliproxyBridgeMetadata } from '../../api/services';
-import { loadOrCreateUnifiedConfig, mutateUnifiedConfig } from '../../config/unified-config-loader';
+import {
+  getImageAnalysisConfig,
+  loadOrCreateUnifiedConfig,
+  mutateUnifiedConfig,
+} from '../../config/unified-config-loader';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 import type { Settings } from '../../types/config';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
+import { expandPath } from '../../utils/helpers';
 import {
   canonicalizeModelIdForProvider,
   extractProviderFromPathname,
   getDeniedModelIdReasonForProvider,
 } from '../../cliproxy/model-id-normalizer';
 import { createRouteErrorHelpers } from './route-helpers';
+import {
+  getImageAnalysisProfileSettingsPath,
+  hasImageAnalysisProfileHook,
+} from '../../utils/hooks/image-analyzer-profile-hook-injector';
+import { hasImageAnalyzerHook } from '../../utils/hooks/image-analyzer-hook-installer';
+import { resolveImageAnalysisRuntimeStatus } from '../../utils/hooks';
 
 const router = Router();
 const MODEL_ENV_KEYS = [
@@ -94,8 +104,16 @@ function resolveSettingsPath(profileOrVariant: string): string {
   const variants = listVariants();
   const variant = variants[profileOrVariant];
   if (variant?.settings) {
-    // Variant settings path (e.g., ~/.ccs/agy-g3.settings.json)
-    return resolvePathWithin(resolvedCcsDir, variant.settings.replace(/^~/, os.homedir()));
+    return path.resolve(expandPath(variant.settings));
+  }
+
+  try {
+    const configuredSettingsPath = loadConfigSafe().profiles[profileOrVariant];
+    if (typeof configuredSettingsPath === 'string' && configuredSettingsPath.trim().length > 0) {
+      return path.resolve(expandPath(configuredSettingsPath));
+    }
+  } catch {
+    // Fall back to the conventional ~/.ccs/<profile>.settings.json path below.
   }
 
   // Regular profile settings
@@ -251,6 +269,47 @@ function canonicalizeProfileSettings(profileOrVariant: string, settings: Setting
   return changed ? next : settings;
 }
 
+async function resolveImageAnalysisStatusForProfile(
+  profileOrVariant: string,
+  settings: Settings,
+  settingsPath: string
+): Promise<Awaited<ReturnType<typeof resolveImageAnalysisRuntimeStatus>>> {
+  const variants = listVariants();
+  const variant = variants[profileOrVariant];
+  const cliproxyProvider = resolveProviderForProfile(profileOrVariant);
+  const cliproxyBridge = resolveCliproxyBridgeMetadata(settings);
+  const status = await resolveImageAnalysisRuntimeStatus(
+    {
+      profileName: profileOrVariant,
+      profileType: cliproxyProvider ? 'cliproxy' : 'settings',
+      cliproxyProvider,
+      isComposite: Boolean(
+        variant && 'type' in variant && (variant as { type?: string }).type === 'composite'
+      ),
+      settingsPath,
+      settings,
+      cliproxyBridge,
+      hookInstalled: hasImageAnalysisProfileHook(profileOrVariant, settingsPath),
+      sharedHookInstalled: hasImageAnalyzerHook(),
+    },
+    getImageAnalysisConfig()
+  );
+
+  return {
+    ...status,
+    persistencePath: status.shouldPersistHook
+      ? getImageAnalysisProfileSettingsPath(profileOrVariant, settingsPath)
+      : null,
+  };
+}
+
+async function resolvePreviewImageAnalysisStatus(profileOrVariant: string, settings: Settings) {
+  const normalizedSettings = canonicalizeProfileSettings(profileOrVariant, settings);
+  const settingsPath = resolveSettingsPath(profileOrVariant);
+
+  return resolveImageAnalysisStatusForProfile(profileOrVariant, normalizedSettings, settingsPath);
+}
+
 function writeSettingsAtomically(settingsPath: string, settings: Settings): void {
   const tempPath = `${settingsPath}.tmp.${process.pid}`;
   fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
@@ -318,7 +377,7 @@ function maskApiKeys(settings: Settings): Settings {
 /**
  * GET /api/settings/:profile - Get settings with masked API keys
  */
-router.get('/:profile', (req: Request, res: Response): void => {
+router.get('/:profile', async (req: Request, res: Response): Promise<void> => {
   try {
     const { profile } = req.params;
     const settingsPath = resolveSettingsPath(profile);
@@ -338,6 +397,11 @@ router.get('/:profile', (req: Request, res: Response): void => {
       mtime: stat.mtime.getTime(),
       path: settingsPath,
       cliproxyBridge: resolveCliproxyBridgeMetadata(settings),
+      imageAnalysisStatus: await resolveImageAnalysisStatusForProfile(
+        profile,
+        settings,
+        settingsPath
+      ),
     });
   } catch (error) {
     respondInternalError(res, error, 'Internal server error.');
@@ -347,7 +411,7 @@ router.get('/:profile', (req: Request, res: Response): void => {
 /**
  * GET /api/settings/:profile/raw - Get full settings (for editing)
  */
-router.get('/:profile/raw', (req: Request, res: Response): void => {
+router.get('/:profile/raw', async (req: Request, res: Response): Promise<void> => {
   if (!requireSensitiveLocalAccess(req, res)) return;
 
   try {
@@ -368,11 +432,42 @@ router.get('/:profile/raw', (req: Request, res: Response): void => {
       mtime: stat.mtime.getTime(),
       path: settingsPath,
       cliproxyBridge: resolveCliproxyBridgeMetadata(settings),
+      imageAnalysisStatus: await resolveImageAnalysisStatusForProfile(
+        profile,
+        settings,
+        settingsPath
+      ),
     });
   } catch (error) {
     respondInternalError(res, error, 'Internal server error.');
   }
 });
+
+/**
+ * POST /api/settings/:profile/image-analysis-status - Preview image analysis status from editor JSON
+ */
+router.post(
+  '/:profile/image-analysis-status',
+  async (req: Request, res: Response): Promise<void> => {
+    if (!requireSensitiveLocalAccess(req, res)) return;
+
+    try {
+      const { profile } = req.params;
+      const { settings } = req.body;
+
+      if (!settings || typeof settings !== 'object') {
+        res.status(400).json({ error: 'settings object is required in request body' });
+        return;
+      }
+
+      res.json({
+        imageAnalysisStatus: await resolvePreviewImageAnalysisStatus(profile, settings as Settings),
+      });
+    } catch (error) {
+      respondInternalError(res, error, 'Internal server error.');
+    }
+  }
+);
 
 /** Required env vars for CLIProxy providers to function */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;

@@ -7,7 +7,7 @@
  * Supports both local (spawn CLIProxyAPI) and remote (connect to external) modes.
  */
 
-import { ResolvedProxyConfig } from './types';
+import type { ResolvedProxyConfig } from './types';
 import { CLIPROXY_DEFAULT_PORT, validatePort } from './config-generator';
 
 /** CLI flags for proxy configuration */
@@ -233,6 +233,7 @@ export function resolveProxyConfig(
       port?: number;
       protocol?: 'http' | 'https';
       auth_token?: string;
+      management_key?: string;
       timeout?: number;
       fallback_enabled?: boolean;
     };
@@ -290,6 +291,7 @@ export function resolveProxyConfig(
 
   // Merge auth token: CLI > ENV > config.yaml
   resolved.authToken = cliFlags.authToken ?? envConfig.authToken ?? yamlConfig.remote?.auth_token;
+  resolved.managementKey = yamlConfig.remote?.management_key;
 
   // Merge timeout: CLI > ENV > config.yaml > default (2000ms in executor)
   resolved.timeout = cliFlags.timeout ?? envConfig.timeout ?? yamlConfig.remote?.timeout;

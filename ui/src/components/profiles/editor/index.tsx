@@ -4,7 +4,7 @@
  */
 
 /* eslint-disable react-refresh/only-export-components */
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useDeferredValue } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -67,6 +67,31 @@ export function ProfileEditor({
     setRawJsonEdits(value);
   }, []);
 
+  const updateNativeImageRead = useCallback(
+    (enabled: boolean) => {
+      const nextSettings = { ...(currentSettings ?? {}) } as Settings;
+      const currentCcsImage =
+        nextSettings.ccs_image && typeof nextSettings.ccs_image === 'object'
+          ? { ...nextSettings.ccs_image }
+          : {};
+
+      if (enabled) {
+        currentCcsImage.native_read = true;
+      } else {
+        delete currentCcsImage.native_read;
+      }
+
+      if (Object.keys(currentCcsImage).length > 0) {
+        nextSettings.ccs_image = currentCcsImage;
+      } else {
+        delete nextSettings.ccs_image;
+      }
+
+      setRawJsonEdits(JSON.stringify(nextSettings, null, 2));
+    },
+    [currentSettings]
+  );
+
   // Sync Visual Editor changes to Raw JSON
   const updateEnvValue = (key: string, value: string) => {
     const newEnv = { ...(currentSettings?.env || {}), [key]: value };
@@ -106,6 +131,66 @@ export function ProfileEditor({
     if (rawJsonEdits !== null) return rawJsonEdits !== JSON.stringify(settings, null, 2);
     return Object.keys(localEdits).length > 0;
   }, [rawJsonEdits, localEdits, settings]);
+
+  const deferredPreviewJson = useDeferredValue(computedRawJsonContent);
+  const previewSettings = useMemo((): Settings | null => {
+    if (!computedHasChanges || !computedIsRawJsonValid) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(deferredPreviewJson) as Settings;
+    } catch {
+      return null;
+    }
+  }, [computedHasChanges, computedIsRawJsonValid, deferredPreviewJson]);
+
+  const {
+    data: previewStatusResponse,
+    isFetching: isPreviewStatusFetching,
+    isError: isPreviewStatusError,
+    isPlaceholderData: isPreviewStatusPlaceholderData,
+  } = useQuery<{ imageAnalysisStatus: SettingsResponse['imageAnalysisStatus'] }>({
+    queryKey: ['settings', profileName, 'image-analysis-status-preview', deferredPreviewJson],
+    enabled: previewSettings !== null,
+    placeholderData: (previousData) => previousData,
+    queryFn: async () => {
+      const res = await fetch(`/api/settings/${profileName}/image-analysis-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: previewSettings }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to preview image-analysis status: ${res.status}`);
+      }
+
+      return res.json();
+    },
+  });
+
+  const imageAnalysisStatus =
+    computedHasChanges && computedIsRawJsonValid && !isPreviewStatusError
+      ? (previewStatusResponse?.imageAnalysisStatus ?? data?.imageAnalysisStatus)
+      : data?.imageAnalysisStatus;
+  const imageAnalysisStatusSource =
+    computedHasChanges &&
+    computedIsRawJsonValid &&
+    !isPreviewStatusError &&
+    previewStatusResponse?.imageAnalysisStatus
+      ? 'editor'
+      : 'saved';
+  const imageAnalysisStatusPreviewState = !computedHasChanges
+    ? 'saved'
+    : !computedIsRawJsonValid
+      ? 'invalid'
+      : isPreviewStatusError
+        ? 'saved'
+        : isPreviewStatusFetching &&
+            (!previewStatusResponse?.imageAnalysisStatus || isPreviewStatusPlaceholderData)
+          ? 'refreshing'
+          : 'preview';
+  const nativeReadPreferenceOverride = currentSettings?.ccs_image?.native_read === true;
 
   // Check for missing required fields (informational warning)
   const missingRequiredFields = useMemo(() => {
@@ -162,7 +247,8 @@ export function ProfileEditor({
       toast.success(i18n.t('commonToast.defaultTargetUpdated'));
     },
     onError: (error: Error, target: CliTarget) => {
-      const targetLabel = target === 'droid' ? 'Factory Droid' : 'Claude Code';
+      const targetLabel =
+        target === 'droid' ? 'Factory Droid' : target === 'codex' ? 'Codex CLI' : 'Claude Code';
       const suffix = error.message.trim() ? `: ${error.message}` : '';
       toast.error(i18n.t('commonToast.failedUpdateDefaultTarget', { target: targetLabel, suffix }));
     },
@@ -254,6 +340,12 @@ export function ProfileEditor({
               isRawJsonValid={computedIsRawJsonValid}
               rawJsonEdits={rawJsonEdits}
               settings={settings}
+              profileTarget={resolvedTarget}
+              imageAnalysisStatus={imageAnalysisStatus}
+              imageAnalysisStatusSource={imageAnalysisStatusSource}
+              imageAnalysisStatusPreviewState={imageAnalysisStatusPreviewState}
+              nativeReadPreferenceOverride={nativeReadPreferenceOverride}
+              onToggleNativeRead={updateNativeImageRead}
               onChange={handleRawJsonChange}
               missingRequiredFields={missingRequiredFields}
             />

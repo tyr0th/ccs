@@ -70,7 +70,7 @@ export const SUPPORT_NOTICES: SupportNotice[] = [
       'Use ccs-codex or ccsx for native Codex runs.',
       'Use ccsxp for the built-in CCS Codex provider shortcut on native Codex.',
       'Built-in Codex and Codex bridge profiles can run on native Codex with --target codex.',
-      'Saved default targets for API profiles and variants remain claude or droid.',
+      'Saved default targets for API profiles and variants can now be claude, droid, or codex.',
     ],
     actions: [
       {
@@ -256,7 +256,7 @@ export const CLI_SUPPORT_ENTRIES: CliSupportEntry[] = [
     routes: [{ label: 'Codex CLI', path: '/codex' }],
     commands: ['ccs-codex', 'ccsx', 'ccs codex --target codex', 'ccs codex-api --target codex'],
     notes:
-      'Runtime-only in v1. Saved default targets for API profiles and CLIProxy variants remain claude or droid.',
+      'Saved default targets for API profiles and CLIProxy variants can now be claude, droid, or codex.',
   },
   {
     id: 'codex-cliproxy',

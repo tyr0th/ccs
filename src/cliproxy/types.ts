@@ -268,6 +268,8 @@ export interface ResolvedProxyConfig {
   protocol: 'http' | 'https';
   /** Auth token for remote proxy authentication */
   authToken?: string;
+  /** Management key for remote management endpoints */
+  managementKey?: string;
   /** Enable fallback to local when remote unreachable (default: true) */
   fallbackEnabled: boolean;
   /** Auto-start local proxy if not running (default: true) */

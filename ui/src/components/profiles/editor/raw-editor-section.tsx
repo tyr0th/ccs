@@ -6,7 +6,9 @@
 import { Suspense, lazy } from 'react';
 import { Loader2, X, AlertTriangle } from 'lucide-react';
 import { GlobalEnvIndicator } from '@/components/shared/global-env-indicator';
+import { ImageAnalysisStatusSection } from './image-analysis-status-section';
 import type { Settings } from './types';
+import type { CliTarget, ImageAnalysisStatus } from '@/lib/api-client';
 
 // Lazy load CodeEditor
 const CodeEditor = lazy(() =>
@@ -18,6 +20,12 @@ interface RawEditorSectionProps {
   isRawJsonValid: boolean;
   rawJsonEdits: string | null;
   settings: Settings | undefined;
+  profileTarget?: CliTarget;
+  imageAnalysisStatus?: ImageAnalysisStatus | null;
+  imageAnalysisStatusSource?: 'saved' | 'editor';
+  imageAnalysisStatusPreviewState?: 'saved' | 'preview' | 'refreshing' | 'invalid';
+  nativeReadPreferenceOverride?: boolean;
+  onToggleNativeRead?: (enabled: boolean) => void;
   onChange: (value: string) => void;
   missingRequiredFields?: string[];
 }
@@ -27,6 +35,12 @@ export function RawEditorSection({
   isRawJsonValid,
   rawJsonEdits,
   settings,
+  profileTarget = 'claude',
+  imageAnalysisStatus,
+  imageAnalysisStatusSource = 'saved',
+  imageAnalysisStatusPreviewState = 'saved',
+  nativeReadPreferenceOverride,
+  onToggleNativeRead,
   onChange,
   missingRequiredFields = [],
 }: RawEditorSectionProps) {
@@ -74,6 +88,16 @@ export function RawEditorSection({
               heightMode="fill-parent"
             />
           </div>
+        </div>
+        <div className="mx-6 mb-4">
+          <ImageAnalysisStatusSection
+            status={imageAnalysisStatus}
+            target={profileTarget}
+            source={imageAnalysisStatusSource}
+            previewState={imageAnalysisStatusPreviewState}
+            nativeReadPreferenceOverride={nativeReadPreferenceOverride}
+            onToggleNativeRead={onToggleNativeRead}
+          />
         </div>
         {/* Global Env Indicator */}
         <div className="mx-6 mb-4">

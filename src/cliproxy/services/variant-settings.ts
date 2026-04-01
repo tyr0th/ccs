@@ -161,7 +161,12 @@ export function createSettingsFile(
   }
 
   // Inject Image Analyzer hooks into variant settings
-  ensureImageAnalyzerHooks(`${provider}-${name}`);
+  ensureImageAnalyzerHooks({
+    profileName: `${provider}-${name}`,
+    profileType: 'cliproxy',
+    cliproxyProvider: provider,
+    settingsPath,
+  });
 
   return settingsPath;
 }
@@ -195,7 +200,12 @@ export function createSettingsFileUnified(
   }
 
   // Inject Image Analyzer hooks into variant settings
-  ensureImageAnalyzerHooks(`${provider}-${name}`);
+  ensureImageAnalyzerHooks({
+    profileName: `${provider}-${name}`,
+    profileType: 'cliproxy',
+    cliproxyProvider: provider,
+    settingsPath,
+  });
 
   return settingsPath;
 }
@@ -284,7 +294,6 @@ export function createCompositeSettingsFile(
   ensureDir(settingsDir);
   writeSettings(settingsPath, settings);
 
-  // Hook injectors target ~/.ccs/<profile>.settings.json; only run for default path.
   if (path.resolve(settingsPath) === path.resolve(defaultSettingsPath)) {
     try {
       ensureWebSearchMcpOrThrow();
@@ -292,7 +301,13 @@ export function createCompositeSettingsFile(
       rollbackSettingsFile(settingsPath, previousSettingsContent, settingsExisted);
       throw error;
     }
-    ensureImageAnalyzerHooks(`composite-${name}`);
+    ensureImageAnalyzerHooks({
+      profileName: `composite-${name}`,
+      profileType: 'cliproxy',
+      cliproxyProvider: tiers[defaultTier].provider,
+      isComposite: true,
+      settingsPath,
+    });
   }
 
   return settingsPath;

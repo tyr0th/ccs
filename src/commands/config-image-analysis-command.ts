@@ -18,13 +18,19 @@ import {
   mapExternalProviderName,
 } from '../cliproxy/provider-capabilities';
 import { extractOption, hasAnyFlag } from './arg-extractor';
+import { normalizeImageAnalysisBackendId } from '../utils/hooks';
 
 interface ImageAnalysisCommandOptions {
   enable?: boolean;
   disable?: boolean;
   timeout?: number;
   setModel?: { provider: string; model: string };
+  setFallback?: string;
+  setProfileBackend?: { profile: string; backend: string };
+  clearProfileBackend?: string;
   setModelError?: string;
+  setFallbackError?: string;
+  setProfileBackendError?: string;
   help?: boolean;
 }
 
@@ -33,6 +39,13 @@ const IMAGE_ANALYSIS_PROVIDER_ALIASES = Object.freeze(
     (alias, index, aliases) => aliases.indexOf(alias) === index
   )
 );
+
+function isConfiguredImageAnalysisBackend(
+  backend: string | null,
+  providerModels: Record<string, string>
+): backend is string {
+  return Boolean(backend && Object.prototype.hasOwnProperty.call(providerModels, backend));
+}
 
 function parseArgs(args: string[]): ImageAnalysisCommandOptions {
   const options: ImageAnalysisCommandOptions = {
@@ -62,6 +75,36 @@ function parseArgs(args: string[]): ImageAnalysisCommandOptions {
     }
   }
 
+  const setFallbackIdx = args.indexOf('--set-fallback');
+  if (setFallbackIdx !== -1) {
+    const backend = args[setFallbackIdx + 1];
+    if (backend && !backend.startsWith('-')) {
+      options.setFallback = backend;
+    } else {
+      options.setFallbackError = '--set-fallback requires <backend>';
+    }
+  }
+
+  const setProfileBackendIdx = args.indexOf('--set-profile-backend');
+  if (setProfileBackendIdx !== -1) {
+    const profile = args[setProfileBackendIdx + 1];
+    const backend = args[setProfileBackendIdx + 2];
+    if (profile && backend && !profile.startsWith('-') && !backend.startsWith('-')) {
+      options.setProfileBackend = { profile, backend };
+    } else {
+      options.setProfileBackendError = '--set-profile-backend requires <profile> <backend>';
+    }
+  }
+
+  const clearProfileBackend = extractOption(args, ['--clear-profile-backend']);
+  if (clearProfileBackend.found) {
+    if (clearProfileBackend.value && !clearProfileBackend.value.startsWith('-')) {
+      options.clearProfileBackend = clearProfileBackend.value;
+    } else {
+      options.setProfileBackendError = '--clear-profile-backend requires <profile>';
+    }
+  }
+
   return options;
 }
 
@@ -82,6 +125,13 @@ function showHelp(): void {
   console.log(`  ${color('--disable', 'command')}                 Disable image analysis`);
   console.log(`  ${color('--timeout <seconds>', 'command')}       Set analysis timeout (10-600)`);
   console.log(`  ${color('--set-model <p> <m>', 'command')}       Set model for provider`);
+  console.log(`  ${color('--set-fallback <backend>', 'command')}  Set fallback backend`);
+  console.log(
+    `  ${color('--set-profile-backend <p> <b>', 'command')} Map a profile alias to a backend`
+  );
+  console.log(
+    `  ${color('--clear-profile-backend <p>', 'command')}   Remove a saved profile mapping`
+  );
   console.log(`  ${color('--help, -h', 'command')}                Show this help`);
   console.log('');
 
@@ -90,7 +140,9 @@ function showHelp(): void {
   if (IMAGE_ANALYSIS_PROVIDER_ALIASES.length > 0) {
     console.log(`  ${dim(`Aliases accepted: ${IMAGE_ANALYSIS_PROVIDER_ALIASES.join(', ')}`)}`);
   }
-  console.log(`  ${dim('Default model: gemini-2.5-flash (most providers)')}`);
+  console.log(
+    `  ${dim('Defaults: agy -> gemini-3-1-flash-preview, gemini -> gemini-3-flash-preview')}`
+  );
   console.log('');
 
   console.log(subheader('Examples:'));
@@ -157,6 +209,15 @@ function showStatus(): void {
   console.log(subheader('Configuration:'));
   console.log(`  File: ${color('~/.ccs/config.yaml', 'path')}`);
   console.log(`  Section: ${dim('image_analysis')}`);
+  console.log(`  Fallback backend: ${color(config.fallback_backend || 'none', 'command')}`);
+  const profileBackends = Object.entries(config.profile_backends ?? {});
+  if (profileBackends.length > 0) {
+    console.log('');
+    console.log(subheader('Profile Backends:'));
+    for (const [profile, backend] of profileBackends) {
+      console.log(`  ${color(profile.padEnd(16), 'command')} ${backend}`);
+    }
+  }
   console.log('');
 
   // Troubleshooting hint if disabled
@@ -178,6 +239,16 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
 
   if (options.setModelError) {
     console.error(fail(options.setModelError));
+    process.exit(1);
+  }
+
+  if (options.setFallbackError) {
+    console.error(fail(options.setFallbackError));
+    process.exit(1);
+  }
+
+  if (options.setProfileBackendError) {
+    console.error(fail(options.setProfileBackendError));
     process.exit(1);
   }
 
@@ -226,6 +297,51 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
       ...imageConfig.provider_models,
       [canonicalProvider]: model,
     };
+    hasChanges = true;
+  }
+
+  if (options.setFallback) {
+    const normalizedBackend = normalizeImageAnalysisBackendId(
+      options.setFallback,
+      Object.keys(imageConfig.provider_models)
+    );
+    if (!isConfiguredImageAnalysisBackend(normalizedBackend, imageConfig.provider_models)) {
+      console.error(fail(`Invalid fallback backend: ${options.setFallback}`));
+      process.exit(1);
+    }
+    imageConfig.fallback_backend = normalizedBackend;
+    hasChanges = true;
+  }
+
+  if (options.setProfileBackend) {
+    const profileName = options.setProfileBackend.profile.trim();
+    const normalizedBackend = normalizeImageAnalysisBackendId(
+      options.setProfileBackend.backend,
+      Object.keys(imageConfig.provider_models)
+    );
+    if (!profileName) {
+      console.error(fail('Profile name cannot be empty'));
+      process.exit(1);
+    }
+    if (!isConfiguredImageAnalysisBackend(normalizedBackend, imageConfig.provider_models)) {
+      console.error(fail(`Invalid backend: ${options.setProfileBackend.backend}`));
+      process.exit(1);
+    }
+    imageConfig.profile_backends = {
+      ...(imageConfig.profile_backends ?? {}),
+      [profileName]: normalizedBackend,
+    };
+    hasChanges = true;
+  }
+
+  if (options.clearProfileBackend) {
+    const profileName = options.clearProfileBackend.trim().toLowerCase();
+    const nextProfileBackends = Object.fromEntries(
+      Object.entries(imageConfig.profile_backends ?? {}).filter(
+        ([name]) => name.trim().toLowerCase() !== profileName
+      )
+    );
+    imageConfig.profile_backends = nextProfileBackends;
     hasChanges = true;
   }
 
