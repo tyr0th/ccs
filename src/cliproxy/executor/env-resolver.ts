@@ -20,11 +20,15 @@ import { CLIProxyProvider } from '../types';
 import { CompositeTierConfig } from '../../config/unified-config-types';
 import { getWebSearchHookEnv } from '../../utils/websearch-manager';
 import { getImageAnalysisHookEnv } from '../../utils/hooks/get-image-analysis-hook-env';
+import { resolveImageAnalysisRuntimeStatus } from '../../utils/hooks/image-analysis-runtime-status';
+import { hasImageAnalysisProfileHook } from '../../utils/hooks/image-analyzer-profile-hook-injector';
+import { hasImageAnalyzerHook } from '../../utils/hooks/image-analyzer-hook-installer';
 import { stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { CodexReasoningProxy } from '../codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
 import { MODEL_ENV_VAR_KEYS, normalizeModelIdForProvider } from '../model-id-normalizer';
+import type { ProxyTarget } from '../proxy-target-resolver';
 
 export interface RemoteProxyConfig {
   host: string;
@@ -61,7 +65,37 @@ export interface ProxyChainConfig {
   compositeDefaultTier?: 'opus' | 'sonnet' | 'haiku';
   /** Optional inherited continuity directory from mapped account profile */
   claudeConfigDir?: string;
+  /** Execution-aware image analysis env prepared by the caller */
+  imageAnalysisEnv?: Record<string, string>;
 }
+
+interface CliproxyImageAnalysisDeps {
+  getImageAnalysisHookEnv: typeof getImageAnalysisHookEnv;
+  hasImageAnalysisProfileHook: typeof hasImageAnalysisProfileHook;
+  hasImageAnalyzerHook: typeof hasImageAnalyzerHook;
+  resolveImageAnalysisRuntimeStatus: typeof resolveImageAnalysisRuntimeStatus;
+}
+
+interface ResolveCliproxyImageAnalysisEnvOptions {
+  profileName: string;
+  provider: CLIProxyProvider;
+  profileSettingsPath?: string;
+  isComposite?: boolean;
+  proxyTarget: ProxyTarget;
+  proxyReachable: boolean;
+}
+
+export interface CliproxyImageAnalysisResolution {
+  env: Record<string, string>;
+  warning: string | null;
+}
+
+const defaultCliproxyImageAnalysisDeps: CliproxyImageAnalysisDeps = {
+  getImageAnalysisHookEnv,
+  hasImageAnalysisProfileHook,
+  hasImageAnalyzerHook,
+  resolveImageAnalysisRuntimeStatus,
+};
 
 const CODEX_EFFORT_SUFFIX_REGEX = /^(.*)-(xhigh|high|medium)$/i;
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
@@ -95,6 +129,49 @@ function normalizeCodexEnvForDirectUpstream(envVars: NodeJS.ProcessEnv): NodeJS.
   return nextEnv ?? envVars;
 }
 
+export async function resolveCliproxyImageAnalysisEnv(
+  options: ResolveCliproxyImageAnalysisEnvOptions,
+  deps: Partial<CliproxyImageAnalysisDeps> = {}
+): Promise<CliproxyImageAnalysisResolution> {
+  const resolvedDeps = { ...defaultCliproxyImageAnalysisDeps, ...deps };
+  const context = {
+    profileName: options.profileName,
+    profileType: 'cliproxy' as const,
+    cliproxyProvider: options.provider,
+    isComposite: options.isComposite,
+    settingsPath: options.profileSettingsPath,
+    hookInstalled: resolvedDeps.hasImageAnalysisProfileHook(
+      options.profileName,
+      options.profileSettingsPath
+    ),
+    sharedHookInstalled: resolvedDeps.hasImageAnalyzerHook(),
+  };
+
+  const env = resolvedDeps.getImageAnalysisHookEnv(context);
+  const currentProvider = env['CCS_CURRENT_PROVIDER'];
+  if (env['CCS_IMAGE_ANALYSIS_SKIP'] === '1' || !currentProvider) {
+    return { env, warning: null };
+  }
+
+  const status = await resolvedDeps.resolveImageAnalysisRuntimeStatus(context, undefined, {
+    getProxyTarget: () => options.proxyTarget,
+    isCliproxyRunning: async () => options.proxyReachable,
+  });
+
+  if (status.effectiveRuntimeMode === 'native-read') {
+    return {
+      env: {
+        ...env,
+        CCS_CURRENT_PROVIDER: '',
+        CCS_IMAGE_ANALYSIS_SKIP: '1',
+      },
+      warning: `${status.effectiveRuntimeReason || `Image analysis via ${currentProvider} is unavailable.`} This session will use native Read.`,
+    };
+  }
+
+  return { env, warning: null };
+}
+
 /**
  * Build final environment variables for Claude CLI execution
  * Handles proxy chain ordering and integration with hooks
@@ -116,6 +193,7 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
     compositeTiers,
     compositeDefaultTier,
     claudeConfigDir,
+    imageAnalysisEnv: resolvedImageAnalysisEnv,
   } = config;
 
   // Build base env vars - check remote mode first
@@ -253,7 +331,7 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
 
   // Add hook environment variables
   const webSearchEnv = getWebSearchHookEnv();
-  const imageAnalysisEnv = getImageAnalysisHookEnv(provider);
+  const imageAnalysisEnv = resolvedImageAnalysisEnv ?? getImageAnalysisHookEnv(provider);
 
   // Merge all environment variables (filter undefined values)
   const baseEnv = Object.fromEntries(

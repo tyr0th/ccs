@@ -13,6 +13,7 @@ import {
   normalizeProtocol,
   validateRemotePort,
 } from './config-generator';
+import { getProxyEnvVars } from './proxy-config-resolver';
 import { getEffectiveManagementSecret } from './auth-token-manager';
 
 /** Resolved proxy target for making requests */
@@ -27,6 +28,8 @@ export interface ProxyTarget {
   authToken?: string;
   /** Optional management key for management API endpoints (/v0/management/*) */
   managementKey?: string;
+  /** Whether HTTPS requests should allow self-signed certificates */
+  allowSelfSigned?: boolean;
   /** True if targeting remote server, false if local */
   isRemote: boolean;
 }
@@ -46,6 +49,7 @@ function loadCliproxyServerConfig(): CliproxyServerConfig | undefined {
  */
 export function getProxyTarget(): ProxyTarget {
   const config = loadCliproxyServerConfig();
+  const envConfig = getProxyEnvVars();
 
   if (config?.remote?.enabled && config.remote?.host) {
     // Normalize protocol (handles case sensitivity and invalid values)
@@ -60,6 +64,7 @@ export function getProxyTarget(): ProxyTarget {
       protocol,
       authToken: config.remote.auth_token || undefined, // Empty string -> undefined
       managementKey: config.remote.management_key || undefined, // Empty string -> undefined
+      allowSelfSigned: envConfig.allowSelfSigned,
       isRemote: true,
     };
   }
