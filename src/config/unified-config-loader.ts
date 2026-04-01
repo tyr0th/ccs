@@ -851,6 +851,19 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
+  // Quota management section
+  if (config.quota_management !== null && config.quota_management !== undefined) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Quota Management: Auto-failover between Claude subscription accounts');
+    lines.push('# Switches to backup account when primary hits exhaustion_threshold.');
+    lines.push('# Two-layer: pre-flight check (before session) + runtime monitor (during).');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml.dump({ quota_management: config.quota_management }, { indent: 2, lineWidth: -1 }).trim()
+    );
+    lines.push('');
+  }
+
   // Image analysis section
   if (config.image_analysis) {
     lines.push('# ----------------------------------------------------------------------------');
