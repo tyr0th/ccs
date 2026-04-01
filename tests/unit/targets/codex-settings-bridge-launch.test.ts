@@ -68,6 +68,13 @@ describe('Codex settings bridge launch', () => {
     fs.writeFileSync(
       fakeCodexPath,
       `#!/bin/sh
+if [ "$1" = "-c" ] || [ "$1" = "--config" ]; then
+  if [ "$3" = "--version" ] || [ "$3" = "-v" ]; then
+    echo "codex-cli 0.118.0-alpha.3"
+    exit 0
+  fi
+fi
+
 if [ "$1" = "--version" ]; then
   echo "codex-cli 0.118.0-alpha.3"
   exit 0

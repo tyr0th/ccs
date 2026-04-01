@@ -72,4 +72,56 @@ describe('codex-detector', () => {
 
     execFileSyncSpy.mockRestore();
   });
+
+  it('falls back to a direct -c probe when help text omits the config flag', () => {
+    const fakeCodex = path.join(tmpDir, 'codex');
+    fs.writeFileSync(fakeCodex, '');
+    process.env.CCS_CODEX_PATH = fakeCodex;
+
+    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
+      const joinedArgs = Array.isArray(args) ? args.join(' ') : '';
+
+      if (joinedArgs.includes('--help')) {
+        return 'Codex CLI\n';
+      }
+
+      if (joinedArgs.includes('-c') && joinedArgs.includes('--version')) {
+        return 'codex-cli 0.119.0-alpha.1';
+      }
+
+      return 'codex-cli 0.119.0-alpha.1';
+    });
+
+    const info = getCodexBinaryInfo();
+
+    expect(info?.features).toContain('config-overrides');
+
+    execFileSyncSpy.mockRestore();
+  });
+
+  it('still detects support from broader help text when the direct probe fails', () => {
+    const fakeCodex = path.join(tmpDir, 'codex');
+    fs.writeFileSync(fakeCodex, '');
+    process.env.CCS_CODEX_PATH = fakeCodex;
+
+    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
+      const joinedArgs = Array.isArray(args) ? args.join(' ') : '';
+
+      if (joinedArgs.includes('--help')) {
+        return 'Codex CLI\n  -c, --config <CONFIG_OVERRIDE>\n';
+      }
+
+      if (joinedArgs.includes('-c') && joinedArgs.includes('--version')) {
+        throw new Error('unsupported');
+      }
+
+      return 'codex-cli 0.119.0-alpha.1';
+    });
+
+    const info = getCodexBinaryInfo();
+
+    expect(info?.features).toContain('config-overrides');
+
+    execFileSyncSpy.mockRestore();
+  });
 });

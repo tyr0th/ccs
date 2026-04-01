@@ -20,14 +20,29 @@ const testRoot = path.join(os.tmpdir(), `ccs-codex-dashboard-test-${Date.now()}`
 const codexHome = path.join(testRoot, '.codex-home');
 const codexStubPath = path.join(testRoot, 'codex');
 
-function writeCodexStub(options?: { helpText?: string; version?: string }) {
+function writeCodexStub(options?: {
+  helpText?: string;
+  version?: string;
+  supportsConfigOverrides?: boolean;
+}) {
   const helpText =
     options?.helpText ?? '  -c, --config <key=value>\n  -p, --profile <CONFIG_PROFILE>\n';
   const version = options?.version ?? 'codex-cli 0.118.0-alpha.3';
+  const supportsConfigOverrides = options?.supportsConfigOverrides ?? true;
 
   fs.writeFileSync(
     codexStubPath,
     `#!/bin/sh
+if [ "$1" = "-c" ] || [ "$1" = "--config" ]; then
+  if [ "${supportsConfigOverrides ? '1' : '0'}" != "1" ]; then
+    printf '%s\\n' 'codex: unknown option --config' >&2
+    exit 1
+  fi
+  if [ "$3" = "--version" ] || [ "$3" = "-v" ]; then
+    printf '%s\\n' "${version}"
+    exit 0
+  fi
+fi
 if [ "$1" = "--version" ]; then
   printf '%s\\n' "${version}"
   exit 0
@@ -272,7 +287,10 @@ requires_openai_auth = true
   });
 
   it('warns when active profile is missing, config overrides are unavailable, or risky fields exist', async () => {
-    writeCodexStub({ helpText: '  -p, --profile <CONFIG_PROFILE>\n' });
+    writeCodexStub({
+      helpText: '  -p, --profile <CONFIG_PROFILE>\n',
+      supportsConfigOverrides: false,
+    });
     fs.writeFileSync(
       path.join(codexHome, 'config.toml'),
       `profile = "missing-profile"

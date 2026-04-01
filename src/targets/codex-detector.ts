@@ -5,6 +5,7 @@ import { escapeShellArg } from '../utils/shell-executor';
 import type { TargetBinaryInfo } from './target-adapter';
 
 const CODEX_CONFIG_OVERRIDE_FEATURE = 'config-overrides';
+const CODEX_CONFIG_OVERRIDE_PROBE_ARGS = ['-c', 'model="gpt-5"', '--version'];
 
 function runCodexProbe(codexPath: string, args: string[]): string | undefined {
   const isWindows = process.platform === 'win32';
@@ -49,9 +50,25 @@ export function readCodexVersion(codexPath: string): string | undefined {
   return runCodexProbe(codexPath, ['--version'])?.trim();
 }
 
+function codexHelpAdvertisesConfigOverrides(helpText: string | undefined): boolean {
+  if (!helpText) {
+    return false;
+  }
+
+  return /(^|\n)\s*-c,\s*--config\b/m.test(helpText) || helpText.includes('--config <key=value>');
+}
+
+function codexSupportsConfigOverrideProbe(codexPath: string): boolean {
+  return !!runCodexProbe(codexPath, CODEX_CONFIG_OVERRIDE_PROBE_ARGS)?.trim();
+}
+
 function detectCodexFeatures(codexPath: string): readonly string[] {
+  if (codexSupportsConfigOverrideProbe(codexPath)) {
+    return [CODEX_CONFIG_OVERRIDE_FEATURE];
+  }
+
   const helpText = runCodexProbe(codexPath, ['--help']);
-  return helpText?.includes('--config <key=value>') ? [CODEX_CONFIG_OVERRIDE_FEATURE] : [];
+  return codexHelpAdvertisesConfigOverrides(helpText) ? [CODEX_CONFIG_OVERRIDE_FEATURE] : [];
 }
 
 export function detectCodexCli(): string | null {

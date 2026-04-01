@@ -126,7 +126,17 @@ if (envOut) {
     }) + '\\n'
   );
 }
-if (cliArgs.includes('--version') || cliArgs.includes('-v')) {
+const configFlagIndex = cliArgs.findIndex((arg) => arg === '-c' || arg === '--config');
+if (process.env.CCS_TEST_CODEX_CONFIG_OVERRIDE_STATUS === 'unsupported' && configFlagIndex !== -1) {
+  process.stderr.write('codex: unknown option --config\\n');
+  process.exit(1);
+}
+if (
+  cliArgs.includes('--version') ||
+  cliArgs.includes('-v') ||
+  (configFlagIndex !== -1 &&
+    (cliArgs[configFlagIndex + 2] === '--version' || cliArgs[configFlagIndex + 2] === '-v'))
+) {
   process.stdout.write(process.env.CCS_TEST_CODEX_VERSION || 'codex-cli 0.118.0-alpha.3');
   process.exit(0);
 }
@@ -324,6 +334,7 @@ process.exit(0);
         CCS_HOME: tmpHome,
         CCS_CODEX_PATH: fakeCodexPath,
         CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+        CCS_TEST_CODEX_CONFIG_OVERRIDE_STATUS: 'unsupported',
         CCS_TEST_CODEX_VERSION: 'codex-cli 9.9.9-test',
         CCS_TEST_CODEX_HELP: '  -p, --profile <CONFIG_PROFILE>\\n',
       }
@@ -333,7 +344,31 @@ process.exit(0);
     expect(result.stderr).toContain('Codex CLI (codex-cli 9.9.9-test)');
     expect(result.stderr).toContain('does not advertise --config overrides');
     const calls = readLoggedCodexCalls(codexArgsLogPath);
-    expect(calls).toEqual([['--help'], ['--version']]);
+    expect(calls).toEqual([['-c', 'model="gpt-5"', '--version'], ['--help'], ['--version']]);
+  });
+
+  it('accepts native Codex reasoning overrides when the direct -c probe succeeds', () => {
+    if (process.platform === 'win32') return;
+
+    const result = runCcs(
+      ['default', '--target', 'codex', '--effort', 'high', 'fix failing tests'],
+      {
+        ...process.env,
+        CI: '1',
+        NO_COLOR: '1',
+        CCS_HOME: tmpHome,
+        CCS_CODEX_PATH: fakeCodexPath,
+        CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+        CCS_TEST_CODEX_VERSION: 'codex-cli 9.9.9-test',
+        CCS_TEST_CODEX_HELP: '  -p, --profile <CONFIG_PROFILE>\\n',
+      }
+    );
+
+    expect(result.status).toBe(0);
+    expect(readLoggedCodexCalls(codexArgsLogPath)).toEqual([
+      ['-c', 'model="gpt-5"', '--version'],
+      ['-c', 'model_reasoning_effort="high"', 'fix failing tests'],
+    ]);
   });
 
   it('reports unsupported generic settings profiles before Codex install guidance', () => {
