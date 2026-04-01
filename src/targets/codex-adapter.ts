@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import type { ProfileType } from '../types/profile';
 import { runCleanup } from '../errors';
+import { expandPath } from '../utils/helpers';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
 import { escapeShellArg, stripAnthropicEnv, stripCodexSessionEnv } from '../utils/shell-executor';
 import type {
@@ -20,6 +21,7 @@ import {
 const CODEX_RUNTIME_PROVIDER_ID = 'ccs_runtime';
 const CODEX_RUNTIME_ENV_KEY = 'CCS_CODEX_API_KEY';
 const CODEX_REASONING_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
+const CODEX_INFO_FLAGS = new Set(['--help', '-h', '--version', '-v']);
 
 function formatTomlString(value: string): string {
   return JSON.stringify(value);
@@ -83,10 +85,54 @@ function normalizeCodexReasoningOverride(value: string | number | undefined): st
   );
 }
 
-function ensureExplicitCodexHomeDir(env: NodeJS.ProcessEnv): string | undefined {
-  const codexHome = env.CODEX_HOME?.trim();
+function isInformationalCodexInvocation(args: string[]): boolean {
+  if (args.length === 1) {
+    return CODEX_INFO_FLAGS.has(args[0] || '');
+  }
+
+  if (args.length === 2) {
+    return CODEX_INFO_FLAGS.has(args[1] || '');
+  }
+
+  return false;
+}
+
+function normalizeExplicitCodexHomeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const rawCodexHome = env.CODEX_HOME;
+  if (rawCodexHome === undefined) {
+    return env;
+  }
+
+  const trimmedCodexHome = rawCodexHome.trim();
+  if (!trimmedCodexHome) {
+    const nextEnv = { ...env };
+    delete nextEnv.CODEX_HOME;
+    return nextEnv;
+  }
+
+  const normalizedCodexHome = expandPath(trimmedCodexHome);
+  if (normalizedCodexHome === rawCodexHome) {
+    return env;
+  }
+
+  return {
+    ...env,
+    CODEX_HOME: normalizedCodexHome,
+  };
+}
+
+function prepareExplicitCodexHome(
+  env: NodeJS.ProcessEnv,
+  args: string[]
+): { env: NodeJS.ProcessEnv; error?: string } {
+  const normalizedEnv = normalizeExplicitCodexHomeEnv(env);
+  const codexHome = normalizedEnv.CODEX_HOME;
   if (!codexHome) {
-    return undefined;
+    return { env: normalizedEnv };
+  }
+
+  if (isInformationalCodexInvocation(args)) {
+    return { env: normalizedEnv };
   }
 
   try {
@@ -94,18 +140,27 @@ function ensureExplicitCodexHomeDir(env: NodeJS.ProcessEnv): string | undefined 
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
     if (error.code !== 'EEXIST') {
-      return `[X] Unable to initialize CODEX_HOME (${error.code || 'unknown'}): ${codexHome}`;
+      return {
+        env: normalizedEnv,
+        error: `[X] Unable to initialize CODEX_HOME (${error.code || 'unknown'}): ${codexHome}`,
+      };
     }
   }
 
   try {
     if (!fs.statSync(codexHome).isDirectory()) {
-      return `[X] CODEX_HOME path is not a directory: ${codexHome}`;
+      return {
+        env: normalizedEnv,
+        error: `[X] CODEX_HOME path is not a directory: ${codexHome}`,
+      };
     }
-    return undefined;
+    return { env: normalizedEnv };
   } catch (err) {
     const error = err as NodeJS.ErrnoException;
-    return `[X] Unable to access CODEX_HOME (${error.code || 'unknown'}): ${codexHome}`;
+    return {
+      env: normalizedEnv,
+      error: `[X] Unable to access CODEX_HOME (${error.code || 'unknown'}): ${codexHome}`,
+    };
   }
 }
 
@@ -233,11 +288,12 @@ export class CodexAdapter implements TargetAdapter {
       return exitWithCleanup(1);
     }
 
-    const codexHomeInitError = ensureExplicitCodexHomeDir(env);
-    if (codexHomeInitError) {
-      console.error(codexHomeInitError);
+    const codexHomePreparation = prepareExplicitCodexHome(env, args);
+    if (codexHomePreparation.error) {
+      console.error(codexHomePreparation.error);
       return exitWithCleanup(1);
     }
+    const launchEnv = codexHomePreparation.env;
 
     const isWindows = process.platform === 'win32';
     const isPowerShellScript = isWindows && /\.ps1$/i.test(codexPath);
@@ -248,7 +304,7 @@ export class CodexAdapter implements TargetAdapter {
       child = spawn(
         'powershell.exe',
         ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', codexPath, ...args],
-        { stdio: 'inherit', windowsHide: true, env }
+        { stdio: 'inherit', windowsHide: true, env: launchEnv }
       );
     } else if (needsShell) {
       const cmdString = [codexPath, ...args].map(escapeShellArg).join(' ');
@@ -256,10 +312,10 @@ export class CodexAdapter implements TargetAdapter {
         stdio: 'inherit',
         windowsHide: true,
         shell: true,
-        env,
+        env: launchEnv,
       });
     } else {
-      child = spawn(codexPath, args, { stdio: 'inherit', windowsHide: true, env });
+      child = spawn(codexPath, args, { stdio: 'inherit', windowsHide: true, env: launchEnv });
     }
 
     wireChildProcessSignals(child, (err: NodeJS.ErrnoException) => {

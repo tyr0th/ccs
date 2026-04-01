@@ -7,6 +7,22 @@ import type { TargetBinaryInfo } from './target-adapter';
 const CODEX_CONFIG_OVERRIDE_FEATURE = 'config-overrides';
 const CODEX_CONFIG_OVERRIDE_PROBE_ARGS = ['-c', 'model="gpt-5"', '--version'];
 
+function buildWindowsCodexCandidates(matches: string[]): string[] {
+  const shellCandidates = matches.filter((entry) => /\.(exe|cmd|bat|ps1)$/i.test(entry));
+  const bareCandidates = matches.filter((entry) => !/\.(exe|cmd|bat|ps1)$/i.test(entry));
+  const prioritized: string[] = [];
+
+  for (const entry of shellCandidates) {
+    if (/\.(cmd|bat)$/i.test(entry)) {
+      prioritized.push(entry.replace(/\.(cmd|bat)$/i, '.ps1'));
+    }
+    prioritized.push(entry);
+  }
+
+  prioritized.push(...bareCandidates);
+  return [...new Set(prioritized)];
+}
+
 function runCodexProbe(codexPath: string, args: string[]): string | undefined {
   const isWindows = process.platform === 'win32';
   const isPowerShellScript = isWindows && /\.ps1$/i.test(codexPath);
@@ -112,12 +128,7 @@ export function detectCodexCli(): string | null {
       .map((entry) => entry.trim())
       .filter(Boolean);
 
-    const candidates = isWindows
-      ? [
-          ...matches.filter((entry) => /\.(exe|cmd|bat|ps1)$/i.test(entry)),
-          ...matches.filter((entry) => !/\.(exe|cmd|bat|ps1)$/i.test(entry)),
-        ]
-      : matches;
+    const candidates = isWindows ? buildWindowsCodexCandidates(matches) : matches;
 
     for (const candidate of candidates) {
       try {

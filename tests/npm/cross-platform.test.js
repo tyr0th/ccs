@@ -175,6 +175,11 @@ describe('cross-platform', () => {
         'dedicated ccsxp shortcut entrypoint should exist'
       );
       assert(packageJson.scripts, 'package.json should have scripts field');
+      assert.strictEqual(
+        packageJson.scripts.prepack,
+        'bun run build:all',
+        'prepack should rebuild packaged assets before npm pack/publish'
+      );
     });
   });
 });

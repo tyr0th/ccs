@@ -646,7 +646,7 @@ export function summarizeCodexMcpServers(value: unknown): CodexMcpServerDiagnost
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function getCodexSupportMatrix(): CodexSupportMatrixEntry[] {
+function getCodexSupportMatrix(supportsManagedRouting: boolean): CodexSupportMatrixEntry[] {
   return [
     {
       id: 'default',
@@ -657,14 +657,18 @@ function getCodexSupportMatrix(): CodexSupportMatrixEntry[] {
     {
       id: 'cliproxy-provider-codex',
       label: 'cliproxy provider=codex',
-      supported: true,
-      notes: 'Routed through the CLIProxy Codex Responses bridge.',
+      supported: supportsManagedRouting,
+      notes: supportsManagedRouting
+        ? 'Routed through the CLIProxy Codex Responses bridge.'
+        : 'Requires a Codex build that exposes --config overrides.',
     },
     {
       id: 'settings-with-bridge',
       label: 'settings with bridge metadata',
-      supported: true,
-      notes: 'Supported when the resolved API profile points at a Codex CLIProxy bridge.',
+      supported: supportsManagedRouting,
+      notes: supportsManagedRouting
+        ? 'Supported when the resolved API profile points at a Codex CLIProxy bridge.'
+        : 'Requires a Codex build that exposes --config overrides.',
     },
     {
       id: 'cliproxy-composite',
@@ -696,6 +700,7 @@ function getCodexSupportMatrix(): CodexSupportMatrixEntry[] {
 export async function getCodexDashboardDiagnostics(): Promise<CodexDashboardDiagnostics> {
   const paths = resolveCodexConfigPaths();
   const binaryInfo = getCodexBinaryInfo();
+  const supportsConfigOverrides = !!binaryInfo && codexBinarySupportsConfigOverrides(binaryInfo);
   const docsReference = getCompatibleCliDocsReference('codex');
   const fileProbe = await probeTomlObjectFile(
     paths.configPath,
@@ -715,12 +720,12 @@ export async function getCodexDashboardDiagnostics(): Promise<CodexDashboardDiag
   const features = summarizeCodexFeatureFlags(config?.features);
   const projectTrust = summarizeCodexProjectTrust(config?.projects);
   const mcpServers = summarizeCodexMcpServers(config?.mcp_servers);
-  const supportMatrix = getCodexSupportMatrix();
+  const supportMatrix = getCodexSupportMatrix(supportsConfigOverrides);
 
   const warnings: string[] = [];
   if (!binaryInfo) {
     warnings.push('Codex binary is not detected in PATH or CCS_CODEX_PATH.');
-  } else if (!codexBinarySupportsConfigOverrides(binaryInfo)) {
+  } else if (!supportsConfigOverrides) {
     warnings.push(
       'This Codex build does not expose --config overrides required for CCS-backed Codex routing.'
     );
@@ -766,7 +771,7 @@ export async function getCodexDashboardDiagnostics(): Promise<CodexDashboardDiag
       source: process.env.CCS_CODEX_PATH ? 'CCS_CODEX_PATH' : binaryInfo ? 'PATH' : 'missing',
       version: binaryInfo?.version ?? null,
       overridePath: process.env.CCS_CODEX_PATH || null,
-      supportsConfigOverrides: codexBinarySupportsConfigOverrides(binaryInfo),
+      supportsConfigOverrides,
     },
     file: fileProbe.diagnostics,
     workspacePath: process.cwd(),

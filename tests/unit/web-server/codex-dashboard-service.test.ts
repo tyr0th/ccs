@@ -318,6 +318,12 @@ bearer_token = "secret"
     expect(diagnostics.warnings.some((warning) => warning.includes('inline bearer_token'))).toBe(
       true
     );
+    expect(
+      diagnostics.supportMatrix.find((entry) => entry.id === 'cliproxy-provider-codex')?.supported
+    ).toBe(false);
+    expect(
+      diagnostics.supportMatrix.find((entry) => entry.id === 'settings-with-bridge')?.supported
+    ).toBe(false);
   });
 
   it('saves valid raw config content', async () => {

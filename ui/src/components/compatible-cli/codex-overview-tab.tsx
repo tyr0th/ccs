@@ -62,6 +62,7 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
   const inspectProfileCommand = diagnostics.config.activeProfile
     ? `codex --profile ${diagnostics.config.activeProfile}`
     : 'codex';
+  const supportsManagedRouting = diagnostics.binary.supportsConfigOverrides;
 
   return (
     <ScrollArea className="h-full">
@@ -142,29 +143,42 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              There are two supported paths. Use <code>ccsxp</code> if you want the built-in CCS
-              Codex provider shortcut. Use the saved recipe below if you want plain{' '}
-              <code>codex</code> or a personal alias like <code>cxp</code> to default to CLIProxy.
-            </p>
-            <div className="rounded-md border bg-muted/20 p-3">
-              <p className="font-medium text-foreground">Saved native Codex recipe</p>
-              <pre className="mt-2 overflow-x-auto rounded-md bg-background p-3 text-xs text-foreground">
-                {CLIPROXY_NATIVE_CODEX_RECIPE}
-              </pre>
-            </div>
-            <div className="space-y-1">
+            {supportsManagedRouting ? (
+              <>
+                <p>
+                  There are two supported paths. Use <code>ccsxp</code> if you want the built-in CCS
+                  Codex provider shortcut. Use the saved recipe below if you want plain{' '}
+                  <code>codex</code> or a personal alias like <code>cxp</code> to default to
+                  CLIProxy.
+                </p>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <p className="font-medium text-foreground">Saved native Codex recipe</p>
+                  <pre className="mt-2 overflow-x-auto rounded-md bg-background p-3 text-xs text-foreground">
+                    {CLIPROXY_NATIVE_CODEX_RECIPE}
+                  </pre>
+                </div>
+                <div className="space-y-1">
+                  <p>
+                    1. Save a provider named <code>cliproxy</code> with the base URL and env key
+                    above.
+                  </p>
+                  <p>
+                    2. In <strong>Top-level settings</strong>, set <strong>Default provider</strong>{' '}
+                    to <code>cliproxy</code>.
+                  </p>
+                  <p>
+                    3. Export <code>CLIPROXY_API_KEY</code> in your shell before launching native
+                    Codex.
+                  </p>
+                </div>
+              </>
+            ) : (
               <p>
-                1. Save a provider named <code>cliproxy</code> with the base URL and env key above.
+                This Codex build can still use the native path, but CCS-backed Codex routing via{' '}
+                <code>ccsxp</code> or <code>ccs codex --target codex</code> stays unavailable until
+                the detected Codex binary exposes <code>--config</code> overrides.
               </p>
-              <p>
-                2. In <strong>Top-level settings</strong>, set <strong>Default provider</strong> to{' '}
-                <code>cliproxy</code>.
-              </p>
-              <p>
-                3. Export <code>CLIPROXY_API_KEY</code> in your shell before launching native Codex.
-              </p>
-            </div>
+            )}
           </CardContent>
         </Card>
 
@@ -275,12 +289,16 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
             {
               label: 'CCS Codex shortcut',
               command: 'ccsxp "your prompt"',
-              description: 'Run the built-in CCS Codex provider on native Codex.',
+              description: supportsManagedRouting
+                ? 'Run the built-in CCS Codex provider on native Codex.'
+                : 'Requires a Codex build that exposes --config overrides.',
             },
             {
               label: 'Explicit provider route',
               command: 'ccs codex --target codex "your prompt"',
-              description: 'Use the explicit built-in Codex provider route.',
+              description: supportsManagedRouting
+                ? 'Use the explicit built-in Codex provider route.'
+                : 'Requires a Codex build that exposes --config overrides.',
             },
             {
               label: diagnostics.config.activeProfile
@@ -312,9 +330,19 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
             <div className="rounded-md border p-3 text-sm">
               <p className="font-medium">CCS Codex provider / bridge</p>
               <p className="mt-1 text-muted-foreground">
-                Use <code>ccsxp</code> or <code>ccs codex --target codex</code> when you want the
-                built-in CCS Codex provider on native Codex. That path uses transient CCS-managed
-                overrides and is separate from the saved <code>cliproxy</code> recipe above.
+                {supportsManagedRouting ? (
+                  <>
+                    Use <code>ccsxp</code> or <code>ccs codex --target codex</code> when you want
+                    the built-in CCS Codex provider on native Codex. That path uses transient
+                    CCS-managed overrides and is separate from the saved <code>cliproxy</code>{' '}
+                    recipe above.
+                  </>
+                ) : (
+                  <>
+                    The CCS Codex provider route is currently unavailable because the detected Codex
+                    build does not expose <code>--config</code> overrides.
+                  </>
+                )}
               </p>
             </div>
           </CardContent>

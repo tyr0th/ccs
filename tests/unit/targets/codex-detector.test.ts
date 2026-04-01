@@ -73,6 +73,20 @@ describe('codex-detector', () => {
     execFileSyncSpy.mockRestore();
   });
 
+  it('prefers a sibling PowerShell wrapper over cmd when Windows PATH only exposes codex.cmd', () => {
+    const fakeCmdCodex = path.join(tmpDir, 'codex.cmd');
+    const fakePsCodex = path.join(tmpDir, 'codex.ps1');
+    fs.writeFileSync(fakeCmdCodex, '');
+    fs.writeFileSync(fakePsCodex, '');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(() => `${fakeCmdCodex}\n`);
+
+    expect(detectCodexCli()).toBe(fakePsCodex);
+
+    execSyncSpy.mockRestore();
+  });
+
   it('falls back to a direct -c probe when help text omits the config flag', () => {
     const fakeCodex = path.join(tmpDir, 'codex');
     fs.writeFileSync(fakeCodex, '');
