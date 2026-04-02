@@ -32,5 +32,10 @@ describe('ai-review workflow', () => {
     expect(claudeReviewStep?.with?.path_to_claude_code_executable).toBe(
       '${{ steps.toolchain.outputs.claude_path }}'
     );
+
+    const promptStep = steps.find((step) => step.id === 'review-prompt');
+    expect(promptStep).toBeDefined();
+    expect(promptStep?.run).toContain("printf '%s\\n' \\");
+    expect(promptStep?.run).not.toContain("| sed 's/^            //'");
   });
 });
