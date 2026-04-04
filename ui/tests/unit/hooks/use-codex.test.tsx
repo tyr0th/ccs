@@ -37,6 +37,8 @@ const diagnosticsResponse = {
   config: {
     model: 'gpt-5.3-codex',
     modelReasoningEffort: null,
+    modelContextWindow: null,
+    modelAutoCompactTokenLimit: null,
     modelProvider: null,
     activeProfile: null,
     approvalPolicy: null,

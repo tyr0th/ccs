@@ -179,6 +179,8 @@ describe('codex-dashboard-service', () => {
       path.join(codexHome, 'config.toml'),
       `model = "gpt-5.4"
 profile = "work"
+model_context_window = 800000
+model_auto_compact_token_limit = 700000
 model_provider = "cliproxy"
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
@@ -217,6 +219,8 @@ model = "gpt-5.4"
     expect(diagnostics.binary.installed).toBe(true);
     expect(diagnostics.binary.supportsConfigOverrides).toBe(true);
     expect(diagnostics.config.model).toBe('gpt-5.4');
+    expect(diagnostics.config.modelContextWindow).toBe(800000);
+    expect(diagnostics.config.modelAutoCompactTokenLimit).toBe(700000);
     expect(diagnostics.config.activeProfile).toBe('work');
     expect(diagnostics.config.modelProvider).toBe('cliproxy');
     expect(diagnostics.config.profileCount).toBe(1);
@@ -376,6 +380,8 @@ bearer_token = "secret"
       values: {
         model: 'gpt-5.4',
         modelReasoningEffort: 'high',
+        modelContextWindow: 800000,
+        modelAutoCompactTokenLimit: 700000,
         approvalPolicy: 'never',
         sandboxMode: 'workspace-write',
         webSearch: 'cached',
@@ -394,10 +400,14 @@ bearer_token = "secret"
     const diagnostics = await getCodexDashboardDiagnostics();
     expect(diagnostics.config.model).toBe('gpt-5.4');
     expect(diagnostics.config.modelReasoningEffort).toBe('high');
+    expect(diagnostics.config.modelContextWindow).toBe(800000);
+    expect(diagnostics.config.modelAutoCompactTokenLimit).toBe(700000);
     expect(diagnostics.config.toolOutputTokenLimit).toBe(12000);
     expect(diagnostics.config.personality).toBe('friendly');
     expect(diagnostics.config.projectTrust[0]?.path).toBe('/tmp/workspace-a');
     expect(result.rawText).toContain('model = "gpt-5.4"');
+    expect(result.rawText).toContain('model_context_window = 800000');
+    expect(result.rawText).toContain('model_auto_compact_token_limit = 700000');
     expect(result.config?.model).toBe('gpt-5.4');
   });
 
@@ -661,6 +671,26 @@ bearer_token = "secret"
         kind: 'top-level',
         values: {
           approvalPolicy: 'legacy' as unknown as 'on-request' | 'never' | 'untrusted' | null,
+        },
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+  });
+
+  it('rejects invalid long-context values in structured top-level patches', async () => {
+    await expect(
+      patchCodexConfig({
+        kind: 'top-level',
+        values: {
+          modelContextWindow: 0,
+        },
+      })
+    ).rejects.toThrow(CodexRawConfigValidationError);
+
+    await expect(
+      patchCodexConfig({
+        kind: 'top-level',
+        values: {
+          modelAutoCompactTokenLimit: 1.5,
         },
       })
     ).rejects.toThrow(CodexRawConfigValidationError);

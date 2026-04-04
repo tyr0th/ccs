@@ -107,25 +107,29 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>
-              Use <code>ccsxp</code> if you want the built-in CCS Codex provider shortcut on native
-              Codex. Use the saved recipe below if you want plain <code>codex</code> or a personal
-              alias like <code>cxp</code> to default to CLIProxy.
-            </p>
+            <div className="space-y-1.5">
+              <p>
+                <strong>Built-in:</strong> Use <code>ccsxp</code> for the CCS provider shortcut.
+              </p>
+              <p>
+                <strong>Native:</strong> Configure the recipe below to use CLIProxy directly with{' '}
+                <code>codex</code>.
+              </p>
+            </div>
             <pre className="overflow-x-auto rounded-md border bg-muted/20 p-3 text-xs text-foreground">
               {CLIPROXY_NATIVE_CODEX_RECIPE}
             </pre>
-            <div className="space-y-1">
-              <p>
-                1. Save the <code>cliproxy</code> provider in your user config.
-              </p>
-              <p>
-                2. Set top-level <code>model_provider</code> to <code>cliproxy</code>.
-              </p>
-              <p>
-                3. Export <code>CLIPROXY_API_KEY</code> in your shell before launching native Codex.
-              </p>
-            </div>
+            <ol className="ml-4 list-decimal space-y-1.5 [&>li]:pl-1">
+              <li>
+                Save the <code>cliproxy</code> provider in your user config.
+              </li>
+              <li>
+                Set top-level <code>model_provider</code> to <code>cliproxy</code>.
+              </li>
+              <li>
+                Export <code>CLIPROXY_API_KEY</code> before launching native Codex.
+              </li>
+            </ol>
           </CardContent>
         </Card>
 
@@ -137,11 +141,13 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {docsReference.notes.map((note, index) => (
-              <p key={`${index}-${note}`} className="text-muted-foreground">
-                - {renderTextWithLinks(note)}
-              </p>
-            ))}
+            {docsReference.notes.length > 0 && (
+              <ul className="ml-4 list-disc space-y-1.5 text-muted-foreground [&>li]:pl-1">
+                {docsReference.notes.map((note, index) => (
+                  <li key={`${index}-${note}`}>{renderTextWithLinks(note)}</li>
+                ))}
+              </ul>
+            )}
             <Separator />
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Codex docs</p>

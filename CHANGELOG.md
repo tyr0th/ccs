@@ -1,3 +1,66 @@
+## [7.65.3](https://github.com/kaitranntt/ccs/compare/v7.65.2...v7.65.3) (2026-04-02)
+
+### Hotfixes
+
+* **ci:** restore default ai review output ([58a0fc4](https://github.com/kaitranntt/ccs/commit/58a0fc43e6ce89be7288bb14d4a20ac4165320f0))
+
+## [7.65.2](https://github.com/kaitranntt/ccs/compare/v7.65.1...v7.65.2) (2026-04-02)
+
+### Hotfixes
+
+* **ci:** clean up ai review reruns and logging ([f47e7ae](https://github.com/kaitranntt/ccs/commit/f47e7ae5a752f20138d6a06b8760143608e18509))
+* **ci:** compact ai review comments and switch to glm-5-turbo ([25dddf4](https://github.com/kaitranntt/ccs/commit/25dddf47073673625e51106ab614f8a49ce3b758))
+* **ci:** expand ai review comment layout ([0be4ef7](https://github.com/kaitranntt/ccs/commit/0be4ef7a0d747db28f0db029f10a25ca18a6182d))
+* **ci:** improve ai review comment formatting ([164a8af](https://github.com/kaitranntt/ccs/commit/164a8af82a9661d2aa3bcd8e2aeca862f343c547))
+* **ci:** preserve literal snippet indentation in ai review comments ([f6779a5](https://github.com/kaitranntt/ccs/commit/f6779a503aa13e616d7d642f7c2cc3d769e97efb))
+* **ci:** render fenced evidence snippets in ai review comments ([07b4275](https://github.com/kaitranntt/ccs/commit/07b4275543f7431cad349fabccce9d4149089b90))
+* **ci:** restore reliable structured ai review comments ([5b9427f](https://github.com/kaitranntt/ccs/commit/5b9427f8a02b583222be0772d2e1b45a5eb43ba7))
+* **ci:** separate ai review evidence blocks ([80e2251](https://github.com/kaitranntt/ccs/commit/80e22515b016c4661ed1cdbdd432e5c0068afc03))
+
+## [7.65.1](https://github.com/kaitranntt/ccs/compare/v7.65.0...v7.65.1) (2026-04-02)
+
+### Hotfixes
+
+* **ci:** keep ai review feedback fast and deterministic ([4e05488](https://github.com/kaitranntt/ccs/commit/4e05488c195161792cdc0e74cbd21ed032697a3a))
+
+## [7.65.0](https://github.com/kaitranntt/ccs/compare/v7.64.0...v7.65.0) (2026-04-02)
+
+### Features
+
+* **ci:** bound ai review runtime for large PRs ([7396179](https://github.com/kaitranntt/ccs/commit/7396179c72f6df24e9348b929cd96093e873ce7e)), closes [#880](https://github.com/kaitranntt/ccs/issues/880)
+* **codex-dashboard:** add manual long-context controls ([3246c40](https://github.com/kaitranntt/ccs/commit/3246c40319b0f9329c375ae3fe73ee02261579bb))
+* **codex-dashboard:** refine control center boundary card ([c1ab210](https://github.com/kaitranntt/ccs/commit/c1ab210095c723b8ae5c6cb88cf5f62867a6e84e))
+* **image-analysis:** add dedicated dashboard settings ([9d1d281](https://github.com/kaitranntt/ccs/commit/9d1d281e34392b55f04565c62fa01ee4362c92ff))
+* **image-analysis:** resolve backend status per profile ([ae459fc](https://github.com/kaitranntt/ccs/commit/ae459fc3d7ee85bffc43494e7a4d7b06263e6982))
+* **image:** add native-read controls and autosave settings ([982ffc5](https://github.com/kaitranntt/ccs/commit/982ffc5895102f03de718cb31f87edc23cfc09e8))
+* **ui:** clarify image-analysis target status ([0246e32](https://github.com/kaitranntt/ccs/commit/0246e327feea99f2c2f5e089caa05faddabeb7fb))
+
+### Bug Fixes
+
+* **account-flow:** restore grouped quota hover details ([e852013](https://github.com/kaitranntt/ccs/commit/e8520133f98c58a254e0581de0efd83dd67fec23))
+* **ci:** degrade timed-out ai reviews gracefully ([3935574](https://github.com/kaitranntt/ccs/commit/393557449455386b76c48092b125d43eafe37b0b))
+* **ci:** repair ai review fallback scope script ([0927651](https://github.com/kaitranntt/ccs/commit/09276518a76d2d42988de4ff31104e4d3d77bc67))
+* **ci:** resolve self-hosted Claude path dynamically ([44e2a49](https://github.com/kaitranntt/ccs/commit/44e2a4965017db670a54de3ab1572d7cd47d7b49))
+* **ci:** restore prepack script and stabilize cursor timeout ([037ed63](https://github.com/kaitranntt/ccs/commit/037ed632fddec7d92af85001a8e09aa89ba9051c))
+* **ci:** use self-hosted Claude binary for ai review ([0883b9a](https://github.com/kaitranntt/ccs/commit/0883b9a8fe3fbda912b136fd8b4577554d263dea))
+* **cliproxy:** preserve image-analysis runtime readiness ([3b61673](https://github.com/kaitranntt/ccs/commit/3b61673ad2753e67928e000daa6c396dde72fe80))
+* **image-analysis:** preview backend status safely ([d394772](https://github.com/kaitranntt/ccs/commit/d394772f7cf8acd2fb2051bda5aec8bd2622c141))
+* **image-analysis:** reject unknown backend mappings ([6656685](https://github.com/kaitranntt/ccs/commit/665668579d39ab5d092ec6aaabca73dec9b9e856))
+* **image-analysis:** surface runtime readiness ([1a01c6f](https://github.com/kaitranntt/ccs/commit/1a01c6fc685f105d35bdd59b0647841b3b44c792))
+* **packaging:** remove duplicate prepack script ([2844704](https://github.com/kaitranntt/ccs/commit/2844704b5d79b91970e948de24b28ff6be9745dd))
+* **packaging:** restore prepack contract ([7dd0edb](https://github.com/kaitranntt/ccs/commit/7dd0edb8cd8e9bd33a692f5b8dffb5f6b64595d0))
+* **settings:** restore image tab scrolling and dev websocket routing ([7a783d0](https://github.com/kaitranntt/ccs/commit/7a783d07145443b941f31a767ba0f8abb8fb304f))
+
+### Documentation
+
+* **codex-dashboard:** streamline Codex guidance copy ([7fd2aca](https://github.com/kaitranntt/ccs/commit/7fd2acadbe727a839e44f99081d42687322ee791))
+* **readme:** document image-analysis backend visibility ([d40cc60](https://github.com/kaitranntt/ccs/commit/d40cc60a1da520e9591803e07f26864013ada730))
+* **roadmap:** note codex long-context controls ([0af38c8](https://github.com/kaitranntt/ccs/commit/0af38c85913f987c9bd6d78a0712fd99965a1ff7))
+
+### Tests
+
+* **image-analysis:** cover resolver and dashboard status ([9277b4a](https://github.com/kaitranntt/ccs/commit/9277b4a087db20e067b163341b3add43c9c49c29))
+
 ## [7.64.0](https://github.com/kaitranntt/ccs/compare/v7.63.1...v7.64.0) (2026-04-01)
 
 ### Features

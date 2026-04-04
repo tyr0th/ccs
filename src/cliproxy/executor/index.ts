@@ -66,7 +66,11 @@ import { resolveProfileContinuityInheritance } from '../../auth/profile-continui
 
 // Import modular components
 import { waitForProxyReadyWithSpinner, spawnProxy } from './lifecycle-manager';
-import { buildClaudeEnvironment, logEnvironment } from './env-resolver';
+import {
+  buildClaudeEnvironment,
+  logEnvironment,
+  resolveCliproxyImageAnalysisEnv,
+} from './env-resolver';
 import {
   isNetworkError,
   handleNetworkError,
@@ -172,6 +176,7 @@ export async function execClaudeWithCLIProxy(
           port: cliproxyServerConfig.remote.port,
           protocol: cliproxyServerConfig.remote.protocol,
           auth_token: cliproxyServerConfig.remote.auth_token,
+          management_key: cliproxyServerConfig.remote.management_key,
           timeout: cliproxyServerConfig.remote.timeout,
         }
       : undefined,
@@ -819,6 +824,33 @@ export async function execClaudeWithCLIProxy(
     }
   }
 
+  const imageAnalysisProxyTarget =
+    useRemoteProxy && proxyConfig.host
+      ? {
+          host: proxyConfig.host,
+          port: proxyConfig.port,
+          protocol: proxyConfig.protocol,
+          authToken: proxyConfig.authToken,
+          managementKey: proxyConfig.managementKey,
+          allowSelfSigned: proxyConfig.allowSelfSigned,
+          isRemote: true as const,
+        }
+      : {
+          host: '127.0.0.1',
+          port: cfg.port,
+          protocol: 'http' as const,
+          isRemote: false as const,
+        };
+  const { env: imageAnalysisEnv, warning: imageAnalysisWarning } =
+    await resolveCliproxyImageAnalysisEnv({
+      profileName: cfg.profileName || provider,
+      provider,
+      profileSettingsPath: cfg.customSettingsPath,
+      isComposite: cfg.isComposite,
+      proxyTarget: imageAnalysisProxyTarget,
+      proxyReachable: true,
+    });
+
   // 9. Setup tool sanitization proxy
   let toolSanitizationProxy: ToolSanitizationProxy | null = null;
   let toolSanitizationPort: number | null = null;
@@ -861,6 +893,7 @@ export async function execClaudeWithCLIProxy(
     compositeTiers: cfg.compositeTiers,
     compositeDefaultTier: cfg.compositeDefaultTier,
     claudeConfigDir: inheritedClaudeConfigDir,
+    imageAnalysisEnv,
   });
 
   if (initialEnvVars.ANTHROPIC_BASE_URL) {
@@ -957,6 +990,7 @@ export async function execClaudeWithCLIProxy(
     compositeTiers: cfg.compositeTiers,
     compositeDefaultTier: cfg.compositeDefaultTier,
     claudeConfigDir: inheritedClaudeConfigDir,
+    imageAnalysisEnv,
   });
 
   if (cfg.isComposite && cfg.compositeTiers && cfg.compositeDefaultTier) {
@@ -973,6 +1007,9 @@ export async function execClaudeWithCLIProxy(
 
   const webSearchEnv = getWebSearchHookEnv();
   logEnvironment(env, webSearchEnv, verbose);
+  if (imageAnalysisWarning) {
+    console.error(info(imageAnalysisWarning));
+  }
 
   // 11b. Print thinking status feedback (TTY only, non-piped sessions)
   if (process.stderr.isTTY) {

@@ -74,31 +74,23 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
               How Codex works in CCS
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>Codex is a first-class runtime target in CCS, but it stays runtime-only in v1.</p>
-            <p>
-              <code>ccs-codex</code> and <code>ccsx</code> launch native Codex against your saved
-              native config, while <code>ccsxp</code> is the opinionated shortcut for{' '}
-              <code>ccs codex --target codex</code>.
-            </p>
-            <p>
-              Plain <code>codex</code> or a personal alias like <code>cxp</code> needs{' '}
-              <code>model_provider = "cliproxy"</code> plus a matching{' '}
-              <code>[model_providers.cliproxy]</code> entry if you want CLIProxy as the saved native
-              default.
-            </p>
-            <p>
-              Built-in <code>openai</code> and <code>oss</code> providers are also valid native
-              defaults and do not need a custom <code>[model_providers]</code> stanza.
-            </p>
-            <p>
-              Saved default targets for API profiles and variants still remain on Claude or Droid.
-            </p>
-            <p>
-              CCS-backed Codex launches can apply transient <code>-c</code> overrides and inject
-              <code> CCS_CODEX_API_KEY</code>, so effective runtime values may not match this file
-              exactly.
-            </p>
+          <CardContent className="text-sm text-muted-foreground">
+            <ul className="ml-4 list-disc space-y-1.5 [&>li]:pl-1">
+              <li>Codex is a first-class, runtime-only target in CCS v1.</li>
+              <li>
+                <strong>Native config:</strong> <code>ccs-codex</code> and <code>ccsx</code> launch
+                native Codex using your saved defaults.
+              </li>
+              <li>
+                <strong>Transient overrides:</strong> <code>ccsxp</code> (or{' '}
+                <code>ccs codex --target codex</code>) uses the CCS provider shortcut.
+              </li>
+              <li>
+                <strong>CLIProxy default:</strong> To make plain <code>codex</code> use CLIProxy,
+                set <code>model_provider = "cliproxy"</code> and add the recipe below.
+              </li>
+              <li>API profiles continue to default to Claude or Droid.</li>
+            </ul>
           </CardContent>
         </Card>
 
@@ -145,32 +137,40 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             {supportsManagedRouting ? (
               <>
-                <p>
-                  There are two supported paths. Use <code>ccsxp</code> if you want the built-in CCS
-                  Codex provider shortcut. Use the saved recipe below if you want plain{' '}
-                  <code>codex</code> or a personal alias like <code>cxp</code> to default to
-                  CLIProxy.
-                </p>
+                <div className="space-y-1.5">
+                  <p>
+                    <strong>Two supported paths:</strong>
+                  </p>
+                  <ul className="ml-4 list-disc space-y-1 [&>li]:pl-1">
+                    <li>
+                      <strong>Built-in:</strong> Use <code>ccsxp</code> for the CCS provider
+                      shortcut.
+                    </li>
+                    <li>
+                      <strong>Native:</strong> Configure the recipe below to use CLIProxy directly
+                      with <code>codex</code>.
+                    </li>
+                  </ul>
+                </div>
                 <div className="rounded-md border bg-muted/20 p-3">
                   <p className="font-medium text-foreground">Saved native Codex recipe</p>
                   <pre className="mt-2 overflow-x-auto rounded-md bg-background p-3 text-xs text-foreground">
                     {CLIPROXY_NATIVE_CODEX_RECIPE}
                   </pre>
                 </div>
-                <div className="space-y-1">
-                  <p>
-                    1. Save a provider named <code>cliproxy</code> with the base URL and env key
-                    above.
-                  </p>
-                  <p>
-                    2. In <strong>Top-level settings</strong>, set <strong>Default provider</strong>{' '}
-                    to <code>cliproxy</code>.
-                  </p>
-                  <p>
-                    3. Export <code>CLIPROXY_API_KEY</code> in your shell before launching native
+                <ol className="ml-4 list-decimal space-y-1.5 [&>li]:pl-1">
+                  <li>
+                    Save a provider named <code>cliproxy</code> with the base URL and env key above.
+                  </li>
+                  <li>
+                    In <strong>Top-level settings</strong>, set <strong>Default provider</strong> to{' '}
+                    <code>cliproxy</code>.
+                  </li>
+                  <li>
+                    Export <code>CLIPROXY_API_KEY</code> in your shell before launching native
                     Codex.
-                  </p>
-                </div>
+                  </li>
+                </ol>
               </>
             ) : (
               <p>
@@ -320,30 +320,44 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-md border p-3 text-sm">
-              <p className="font-medium">Native Codex runtime</p>
-              <p className="mt-1 text-muted-foreground">
-                Use <code>ccs-codex</code>, <code>ccsx</code>, or <code>--target codex</code> when
-                you want the local Codex CLI to honor your saved native user config.
-              </p>
+            <div className="flex flex-col rounded-md border p-3 text-sm">
+              <p className="font-medium text-foreground">Native Codex runtime</p>
+              <ul className="mt-2 flex-grow list-disc space-y-1.5 pl-4 text-muted-foreground [&>li]:pl-1">
+                <li>
+                  <code>ccs-codex</code>
+                </li>
+                <li>
+                  <code>ccsx</code>
+                </li>
+                <li>
+                  <code>--target codex</code>
+                </li>
+              </ul>
+              <Badge variant="secondary" className="mt-4 w-fit justify-center font-normal">
+                Honors saved native user config
+              </Badge>
             </div>
-            <div className="rounded-md border p-3 text-sm">
-              <p className="font-medium">CCS Codex provider / bridge</p>
-              <p className="mt-1 text-muted-foreground">
-                {supportsManagedRouting ? (
-                  <>
-                    Use <code>ccsxp</code> or <code>ccs codex --target codex</code> when you want
-                    the built-in CCS Codex provider on native Codex. That path uses transient
-                    CCS-managed overrides and is separate from the saved <code>cliproxy</code>{' '}
-                    recipe above.
-                  </>
-                ) : (
-                  <>
-                    The CCS Codex provider route is currently unavailable because the detected Codex
-                    build does not expose <code>--config</code> overrides.
-                  </>
-                )}
-              </p>
+            <div className="flex flex-col rounded-md border p-3 text-sm">
+              <p className="font-medium text-foreground">CCS Codex provider / bridge</p>
+              {supportsManagedRouting ? (
+                <>
+                  <ul className="mt-2 flex-grow list-disc space-y-1.5 pl-4 text-muted-foreground [&>li]:pl-1">
+                    <li>
+                      <code>ccsxp</code>
+                    </li>
+                    <li>
+                      <code>ccs codex --target codex</code>
+                    </li>
+                  </ul>
+                  <Badge variant="secondary" className="mt-4 w-fit justify-center font-normal">
+                    Uses transient overrides
+                  </Badge>
+                </>
+              ) : (
+                <p className="mt-2 text-muted-foreground">
+                  Unavailable (Codex build lacks <code>--config</code> support).
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

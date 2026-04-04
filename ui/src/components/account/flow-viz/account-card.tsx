@@ -3,9 +3,16 @@
  */
 
 import { AccountSurfaceCard } from '@/components/account/shared/account-surface-card';
+import { QuotaTooltipContent } from '@/components/shared/quota-tooltip-content';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { formatQuotaPercent, getProviderMinQuota, getQuotaFailureInfo, cn } from '@/lib/utils';
+import {
+  cn,
+  formatQuotaPercent,
+  getProviderMinQuota,
+  getProviderResetTime,
+  getQuotaFailureInfo,
+} from '@/lib/utils';
 import { GripVertical, Loader2, Pause, Play } from 'lucide-react';
 import {
   useAccountQuota,
@@ -207,36 +214,45 @@ export function AccountCard({
     hasGroupedVariants && showQuota
       ? (account.variants ?? []).map((variant, index) => {
           const quotaQuery = variantQuotaQueries[index];
-          const minQuota = getProviderMinQuota(account.provider, quotaQuery?.data);
+          const quota = quotaQuery?.data;
+          const minQuota = getProviderMinQuota(account.provider, quota);
+          const resetTime = getProviderResetTime(account.provider, quota);
           const quotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
           const quotaValue = quotaLabel !== null ? Number(quotaLabel) : null;
-          const failureInfo = getQuotaFailureInfo(quotaQuery?.data);
+          const failureInfo = getQuotaFailureInfo(quota);
           const label = variant.audienceLabel ?? variant.detailLabel ?? cleanEmail(variant.email);
 
           return (
-            <div key={variant.id} className="space-y-0.5">
-              <div className="flex items-center justify-between gap-2 text-[8px]">
-                <span className="text-muted-foreground/80 truncate">{label}</span>
-                <span className="font-mono text-foreground/80 shrink-0">
-                  {quotaQuery?.isLoading
-                    ? t('accountCard.quotaLoading')
-                    : quotaValue !== null
-                      ? `${quotaLabel}%`
-                      : failureInfo?.label || t('accountCard.quotaUnavailable')}
-                </span>
-              </div>
-              {quotaValue !== null && (
-                <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      'h-full rounded-full transition-all',
-                      getCompactQuotaColor(quotaValue)
-                    )}
-                    style={{ width: `${quotaValue}%` }}
-                  />
+            <Tooltip key={variant.id}>
+              <TooltipTrigger asChild>
+                <div className="space-y-0.5 cursor-help">
+                  <div className="flex items-center justify-between gap-2 text-[8px]">
+                    <span className="text-muted-foreground/80 truncate">{label}</span>
+                    <span className="font-mono text-foreground/80 shrink-0">
+                      {quotaQuery?.isLoading
+                        ? t('accountCard.quotaLoading')
+                        : quotaValue !== null
+                          ? `${quotaLabel}%`
+                          : failureInfo?.label || t('accountCard.quotaUnavailable')}
+                    </span>
+                  </div>
+                  {quotaValue !== null && (
+                    <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all',
+                          getCompactQuotaColor(quotaValue)
+                        )}
+                        style={{ width: `${quotaValue}%` }}
+                      />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                <QuotaTooltipContent quota={quota} resetTime={resetTime} />
+              </TooltipContent>
+            </Tooltip>
           );
         })
       : null;

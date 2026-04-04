@@ -1,6 +1,8 @@
 export interface CodexTopLevelSettingsView {
   model: string | null;
   modelReasoningEffort: string | null;
+  modelContextWindow: number | null;
+  modelAutoCompactTokenLimit: number | null;
   modelProvider: string | null;
   approvalPolicy: string | null;
   sandboxMode: string | null;
@@ -125,6 +127,8 @@ export function readCodexTopLevelSettings(
   return {
     model: asString(config?.model),
     modelReasoningEffort: asString(config?.model_reasoning_effort),
+    modelContextWindow: asNumber(config?.model_context_window),
+    modelAutoCompactTokenLimit: asNumber(config?.model_auto_compact_token_limit),
     modelProvider: asString(config?.model_provider),
     approvalPolicy: asString(config?.approval_policy),
     sandboxMode: asString(config?.sandbox_mode),

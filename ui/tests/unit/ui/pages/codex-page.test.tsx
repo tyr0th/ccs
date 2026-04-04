@@ -79,6 +79,8 @@ const diagnostics = {
   config: {
     model: 'gpt-5.4',
     modelReasoningEffort: null,
+    modelContextWindow: null,
+    modelAutoCompactTokenLimit: null,
     modelProvider: null,
     activeProfile: null,
     approvalPolicy: null,

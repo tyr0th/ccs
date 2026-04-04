@@ -23,12 +23,12 @@ const singleProviderSchema = z.object({
   provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
   model: z.string().optional(),
   account: z.string().optional(),
-  target: z.enum(['claude', 'droid']),
+  target: z.enum(['claude', 'droid', 'codex']),
 });
 
 const compositeSchema = z.object({
   default_tier: z.enum(['opus', 'sonnet', 'haiku'], { message: 'Default tier is required' }),
-  target: z.enum(['claude', 'droid']),
+  target: z.enum(['claude', 'droid', 'codex']),
   tiers: z.object({
     opus: z.object({
       provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
@@ -375,6 +375,7 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
               >
                 <option value="claude">{t('cliproxyDialog.claudeCode')}</option>
                 <option value="droid">{t('cliproxyDialog.factoryDroid')}</option>
+                <option value="codex">Codex CLI</option>
               </select>
             </div>
 
@@ -433,6 +434,7 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
               >
                 <option value="claude">{t('cliproxyDialog.claudeCode')}</option>
                 <option value="droid">{t('cliproxyDialog.factoryDroid')}</option>
+                <option value="codex">Codex CLI</option>
               </select>
             </div>
 

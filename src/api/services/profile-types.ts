@@ -64,6 +64,35 @@ export interface CliproxyBridgeMetadata {
   usesCurrentAuthToken: boolean;
 }
 
+export interface ImageAnalysisProfileStatus {
+  enabled: boolean;
+  supported: boolean;
+  status: 'active' | 'mapped' | 'attention' | 'disabled' | 'skipped' | 'hook-missing';
+  backendId: string | null;
+  backendDisplayName: string | null;
+  model: string | null;
+  resolutionSource:
+    | 'cliproxy-provider'
+    | 'cliproxy-variant'
+    | 'cliproxy-composite'
+    | 'copilot-alias'
+    | 'cliproxy-bridge'
+    | 'profile-backend'
+    | 'fallback-backend'
+    | 'disabled'
+    | 'unsupported-profile'
+    | 'unresolved'
+    | 'missing-model';
+  reason: string | null;
+  shouldPersistHook: boolean;
+  persistencePath: string | null;
+  runtimePath: string | null;
+  usesCurrentTarget: boolean | null;
+  usesCurrentAuthToken: boolean | null;
+  hookInstalled: boolean | null;
+  sharedHookInstalled: boolean | null;
+}
+
 export interface ResolvedCliproxyBridgeProfile {
   name: string;
   provider: CLIProxyProvider;

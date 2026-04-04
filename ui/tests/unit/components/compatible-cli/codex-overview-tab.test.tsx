@@ -30,6 +30,8 @@ function buildDiagnostics(activeProfile: string | null): CodexDashboardDiagnosti
     config: {
       model: 'gpt-5.4',
       modelReasoningEffort: null,
+      modelContextWindow: null,
+      modelAutoCompactTokenLimit: null,
       modelProvider: 'openai',
       activeProfile,
       approvalPolicy: null,

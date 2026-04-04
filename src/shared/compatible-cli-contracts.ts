@@ -91,6 +91,8 @@ export interface CodexSupportMatrixEntry {
 export interface CodexUserConfigDiagnostics {
   model: string | null;
   modelReasoningEffort: string | null;
+  modelContextWindow: number | null;
+  modelAutoCompactTokenLimit: number | null;
   modelProvider: string | null;
   activeProfile: string | null;
   approvalPolicy: string | null;
@@ -137,6 +139,8 @@ export interface CodexRawConfigResponse {
 export interface CodexTopLevelSettingsPatch {
   model?: string | null;
   modelReasoningEffort?: string | null;
+  modelContextWindow?: number | null;
+  modelAutoCompactTokenLimit?: number | null;
   modelProvider?: string | null;
   approvalPolicy?: string | null;
   sandboxMode?: string | null;

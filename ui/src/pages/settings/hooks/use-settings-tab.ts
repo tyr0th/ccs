@@ -11,19 +11,21 @@ export function useSettingsTab() {
   // Normalize to lowercase for case-insensitive matching (fixes ?tab=Backups vs ?tab=backups)
   const tabParam = searchParams.get('tab')?.toLowerCase();
   const activeTab: SettingsTab =
-    tabParam === 'channels'
-      ? 'channels'
-      : tabParam === 'globalenv'
-        ? 'globalenv'
-        : tabParam === 'proxy'
-          ? 'proxy'
-          : tabParam === 'auth'
-            ? 'auth'
-            : tabParam === 'thinking'
-              ? 'thinking'
-              : tabParam === 'backups'
-                ? 'backups'
-                : 'websearch';
+    tabParam === 'imageanalysis' || tabParam === 'image'
+      ? 'image'
+      : tabParam === 'channels'
+        ? 'channels'
+        : tabParam === 'globalenv'
+          ? 'globalenv'
+          : tabParam === 'proxy'
+            ? 'proxy'
+            : tabParam === 'auth'
+              ? 'auth'
+              : tabParam === 'thinking'
+                ? 'thinking'
+                : tabParam === 'backups'
+                  ? 'backups'
+                  : 'websearch';
 
   const setActiveTab = useCallback(
     (tab: SettingsTab) => {

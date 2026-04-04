@@ -85,6 +85,7 @@ export function HeaderSection({
             <SelectContent>
               <SelectItem value="claude">Claude Code</SelectItem>
               <SelectItem value="droid">Factory Droid</SelectItem>
+              <SelectItem value="codex">Codex CLI</SelectItem>
             </SelectContent>
           </Select>
           {isTargetSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}

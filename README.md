@@ -150,6 +150,8 @@ The dashboard provides visual management for all account types:
 > **Third-party WebSearch steering:** Claude-backed third-party launches keep Anthropic's native `WebSearch` disabled, provision `ccs-websearch.WebSearch` when the managed runtime is available, and append a short system hint so Claude prefers that managed tool over ad hoc Bash or `curl` lookups whenever current web information is needed.
 > Setting `websearch.enabled: false` disables the managed local runtime, but CCS still suppresses Anthropic's native `WebSearch` on third-party backends because those providers cannot execute it correctly.
 
+> **Image backend visibility:** `ccs config image-analysis --set-fallback <backend>` defines the backend CCS should use when a profile alias cannot be inferred directly. Use `--set-profile-backend <profile> <backend>` and `--clear-profile-backend <profile>` for explicit per-profile mappings. In the dashboard, the global `Settings -> Image` section now shows the shared backend routing state, while each profile editor keeps a compact `Image` status card that links back to those global controls.
+
 > **Copilot config behavior:** Opening the dashboard or other read-only Copilot endpoints does not rewrite `~/.ccs/copilot.settings.json`. If CCS detects deprecated Copilot model IDs such as `raptor-mini`, it shows warnings immediately and only persists replacements when you explicitly save the Copilot configuration.
 
 **llama.cpp Integration**: Run a local llama.cpp OpenAI-compatible server and create a profile with `ccs api create --preset llamacpp`. CCS defaults to `http://127.0.0.1:8080`, matching the standard llama.cpp server port.

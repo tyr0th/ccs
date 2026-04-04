@@ -2,10 +2,13 @@
  * Types for Profile Editor
  */
 
-import type { CliTarget, CliproxyBridgeMetadata } from '@/lib/api-client';
+import type { CliTarget, CliproxyBridgeMetadata, ImageAnalysisStatus } from '@/lib/api-client';
 
 export interface Settings {
   env?: Record<string, string>;
+  ccs_image?: {
+    native_read?: boolean;
+  };
 }
 
 export interface SettingsResponse {
@@ -14,6 +17,7 @@ export interface SettingsResponse {
   mtime: number;
   path: string;
   cliproxyBridge?: CliproxyBridgeMetadata | null;
+  imageAnalysisStatus?: ImageAnalysisStatus | null;
 }
 
 export interface ProfileEditorProps {

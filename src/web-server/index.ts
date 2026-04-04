@@ -36,6 +36,7 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   const server = http.createServer(app);
   const wss = new WebSocketServer({
     server,
+    path: '/ws',
     maxPayload: 1024 * 1024, // 1MB hard limit to prevent DoS
     perMessageDeflate: false, // Prevent zip bomb attacks
   });
@@ -88,7 +89,11 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       root: path.join(__dirname, '../../ui'),
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        // Reuse the dashboard HTTP server for HMR in middleware mode.
+        hmr: { server },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

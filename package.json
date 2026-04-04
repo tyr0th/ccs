@@ -1,6 +1,6 @@
 {
   "name": "@kaitranntt/ccs",
-  "version": "7.64.0",
+  "version": "7.65.3",
   "description": "Claude Code Switch - Instant profile switching between Claude, GLM, Kimi, and more",
   "keywords": [
     "cli",
@@ -81,7 +81,7 @@
     "test:native": "bash tests/native/unix/edge-cases.sh",
     "test:e2e": "bun test tests/e2e/ --bail --timeout 60000",
     "report:hardening": "node scripts/hardening-inventory.js",
-    "dev": "bun run build:server && bun dist/ccs.js config --dev",
+    "dev": "bun run build:server && node dist/ccs.js config --dev",
     "dev:symlink": "bash scripts/dev-symlink.sh",
     "dev:unlink": "bash scripts/dev-symlink.sh --restore",
     "ui:build": "cd ui && bun run build",
@@ -139,6 +139,7 @@
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
+    "marked": "^15.0.12",
     "mocha": "^11.7.5",
     "prettier": "^3.6.2",
     "semantic-release": "^25.0.2",

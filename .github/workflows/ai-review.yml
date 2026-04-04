@@ -1,6 +1,6 @@
 # AI Code Review Workflow
-# Uses anthropics/claude-code-action with GLM routing via GitHub App tokens
-# Same-repo PRs stay on the self-hosted cliproxy runner; external PRs use ubuntu-latest
+# Uses anthropics/claude-code-action with GLM routing via GitHub App tokens.
+# Same-repo PRs stay on the self-hosted cliproxy runner; external PRs use ubuntu-latest.
 #
 # Triggers:
 # - Automatically when PR is opened, receives new commits, or is reopened
@@ -24,16 +24,6 @@ on:
         required: true
         type: string
 
-# Smart concurrency: Prevents self-cancellation when non-command comments arrive
-#
-# Problem: When a bot or maintainer posts a normal PR note, GitHub fires an
-# issue_comment event. A loose substring match on "/review" can accidentally
-# treat text like "CI/review" as a manual command, which joins the PR
-# concurrency group and cancels the in-progress review.
-#
-# Solution: Non-actionable triggers (bot comments, comments without /review) get a
-# unique per-run group, while legitimate triggers share the PR-based group for proper
-# cancellation of outdated reviews.
 concurrency:
   group: >-
     ai-review-${{
@@ -57,6 +47,7 @@ jobs:
       issues: read
     outputs:
       pr_number: ${{ steps.context.outputs.pr_number }}
+      base_ref: ${{ steps.context.outputs.base_ref }}
       head_ref: ${{ steps.context.outputs.head_ref }}
       head_sha: ${{ steps.context.outputs.head_sha }}
       head_repo: ${{ steps.context.outputs.head_repo }}
@@ -65,9 +56,6 @@ jobs:
       contributor_source: ${{ steps.context.outputs.contributor_source }}
       runs_on: ${{ steps.context.outputs.runs_on }}
 
-    # Conditions:
-    # - PR event: on opened, synchronize (new commits), or reopened
-    # - Comment event: only if it's a PR, starts with /review, and NOT from a bot
     if: >
       github.event_name == 'pull_request_target' ||
       github.event_name == 'workflow_dispatch' ||
@@ -100,6 +88,7 @@ jobs:
 
           PR_JSON="$(gh api "repos/$REPOSITORY/pulls/$PR_NUM")"
           HEAD_REPO="$(jq -r '.head.repo.full_name' <<<"$PR_JSON")"
+          BASE_REF="$(jq -r '.base.ref' <<<"$PR_JSON")"
           HEAD_REF="$(jq -r '.head.ref' <<<"$PR_JSON")"
           HEAD_SHA="$(jq -r '.head.sha' <<<"$PR_JSON")"
           AUTHOR_LOGIN="$(jq -r '.user.login' <<<"$PR_JSON")"
@@ -115,6 +104,7 @@ jobs:
 
           {
             echo "pr_number=$PR_NUM"
+            echo "base_ref=$BASE_REF"
             echo "head_ref=$HEAD_REF"
             echo "head_sha=$HEAD_SHA"
             echo "head_repo=$HEAD_REPO"
@@ -135,15 +125,14 @@ jobs:
       pull-requests: write
       issues: write
 
-    # GLM API environment for model routing
     env:
       ANTHROPIC_BASE_URL: https://api.z.ai/api/anthropic
-      REVIEW_MODEL: glm-5.1
+      REVIEW_MODEL: glm-5-turbo
       ANTHROPIC_AUTH_TOKEN: ${{ secrets.GLM_API_KEY }}
-      ANTHROPIC_MODEL: glm-5.1
-      ANTHROPIC_DEFAULT_OPUS_MODEL: glm-5.1
-      ANTHROPIC_DEFAULT_SONNET_MODEL: glm-5.1
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: GLM-4.7-FlashX
+      ANTHROPIC_MODEL: glm-5-turbo
+      ANTHROPIC_DEFAULT_OPUS_MODEL: glm-5-turbo
+      ANTHROPIC_DEFAULT_SONNET_MODEL: glm-5-turbo
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: glm-5-turbo
       DISABLE_BUG_COMMAND: '1'
       DISABLE_ERROR_REPORTING: '1'
       DISABLE_TELEMETRY: '1'
@@ -200,18 +189,14 @@ jobs:
       - name: Load review prompt
         id: review-prompt
         env:
-          CONTRIBUTOR_SOURCE: ${{ needs.prepare.outputs.contributor_source }}
-          BASE_REF: ${{ github.base_ref || 'dev' }}
+          BASE_REF: ${{ needs.prepare.outputs.base_ref }}
           USE_CHECKED_OUT_REVIEW_ASSETS: >-
             ${{ github.event_name == 'workflow_dispatch' && needs.prepare.outputs.contributor_source == 'internal' && '1' || '' }}
         run: |
           PROMPT_CONTENT=""
           if [ -n "$USE_CHECKED_OUT_REVIEW_ASSETS" ]; then
-            # workflow_dispatch on an internal PR is the trusted pre-merge replay path.
-            # Use the checked-out branch assets so maintainers can verify the exact formatter under test.
             PROMPT_CONTENT=$(cat .github/review-prompt.md 2>/dev/null || echo "")
           else
-            # pull_request_target and issue_comment must stay pinned to the base branch to prevent prompt injection.
             git fetch origin "$BASE_REF" --depth=1 2>/dev/null || true
             PROMPT_CONTENT=$(git show "origin/${BASE_REF}:.github/review-prompt.md" 2>/dev/null || echo "")
           fi
@@ -261,9 +246,9 @@ jobs:
           anthropic_api_key: ${{ secrets.GLM_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token }}
           allowed_non_write_users: ${{ needs.prepare.outputs.contributor_source == 'external' && '*' || '' }}
-          display_report: false # Keep all public review output on the normalized comment path
-          show_full_output: false # Keep scratch output out of public logs
-          track_progress: false # Disabled - no progress comments, just final review
+          display_report: false
+          show_full_output: false
+          track_progress: false
           prompt: |
             think
 
@@ -313,8 +298,6 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REVIEW_MARKER: >-
             <!-- ccs-ai-review
-            run:${{ github.run_id }}
-            attempt:${{ github.run_attempt }}
             pr:${{ needs.prepare.outputs.pr_number }}
             sha:${{ needs.prepare.outputs.head_sha }} -->
         run: |

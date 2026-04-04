@@ -243,6 +243,18 @@ function applyTopLevelSettingsPatch(
       'model_reasoning_effort'
     );
   }
+  if (hasOwn(values, 'modelContextWindow')) {
+    setNumberField(target, 'model_context_window', values.modelContextWindow, {
+      integer: true,
+      min: 1,
+    });
+  }
+  if (hasOwn(values, 'modelAutoCompactTokenLimit')) {
+    setNumberField(target, 'model_auto_compact_token_limit', values.modelAutoCompactTokenLimit, {
+      integer: true,
+      min: 1,
+    });
+  }
   if (hasOwn(values, 'modelProvider')) {
     setStringField(target, 'model_provider', values.modelProvider);
   }
@@ -778,6 +790,8 @@ export async function getCodexDashboardDiagnostics(): Promise<CodexDashboardDiag
     config: {
       model: asString(config?.model),
       modelReasoningEffort: asString(config?.model_reasoning_effort),
+      modelContextWindow: asNumber(config?.model_context_window),
+      modelAutoCompactTokenLimit: asNumber(config?.model_auto_compact_token_limit),
       modelProvider: asString(config?.model_provider),
       activeProfile,
       approvalPolicy: summarizeApprovalPolicy(config?.approval_policy),

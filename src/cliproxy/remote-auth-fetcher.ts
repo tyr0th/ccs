@@ -3,6 +3,7 @@
  * Fetches and transforms auth data from remote CLIProxyAPI.
  */
 
+import * as https from 'https';
 import {
   getProxyTarget,
   buildProxyUrl,
@@ -14,6 +15,87 @@ import type { CLIProxyProvider } from './types';
 
 /** Timeout for remote fetch requests (ms) */
 const REMOTE_FETCH_TIMEOUT_MS = 5000;
+
+async function fetchRemoteAuthResponse(
+  url: string,
+  headers: Record<string, string>,
+  target: ProxyTarget
+): Promise<Response> {
+  if (target.protocol !== 'https' || !target.allowSelfSigned) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
+
+    try {
+      return await fetch(url, {
+        signal: controller.signal,
+        headers,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  return new Promise<Response>((resolve, reject) => {
+    const agent = new https.Agent({ rejectUnauthorized: false });
+    let settled = false;
+
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      callback();
+    };
+
+    const timeoutId = setTimeout(() => {
+      const timeoutError = new Error('Request timeout');
+      req.destroy(timeoutError);
+      settle(() => reject(timeoutError));
+    }, REMOTE_FETCH_TIMEOUT_MS);
+
+    const req = https.request(
+      url,
+      {
+        method: 'GET',
+        headers,
+        agent,
+        timeout: REMOTE_FETCH_TIMEOUT_MS,
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          settle(() =>
+            resolve(
+              new Response(body, {
+                status: res.statusCode || 500,
+                statusText: res.statusMessage ?? '',
+                headers:
+                  typeof res.headers['content-type'] === 'string'
+                    ? { 'Content-Type': res.headers['content-type'] }
+                    : undefined,
+              })
+            )
+          );
+        });
+      }
+    );
+
+    req.on('error', (error) => {
+      settle(() => reject(error));
+    });
+
+    req.on('timeout', () => {
+      const timeoutError = new Error('Request timeout');
+      req.destroy(timeoutError);
+      settle(() => reject(timeoutError));
+    });
+
+    req.end();
+  });
+}
 
 /** Remote auth file from CLIProxyAPI /v0/management/auth-files */
 interface RemoteAuthFile {
@@ -60,16 +142,8 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
   const url = buildProxyUrl(proxyTarget, '/v0/management/auth-files');
   const headers = buildManagementHeaders(proxyTarget);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REMOTE_FETCH_TIMEOUT_MS);
-
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers,
-    });
-
-    clearTimeout(timeoutId);
+    const response = await fetchRemoteAuthResponse(url, headers, proxyTarget);
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
@@ -87,9 +161,10 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
 
     return transformRemoteAuthFiles(data.files as RemoteAuthFile[]);
   } catch (error) {
-    clearTimeout(timeoutId);
-
     if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Remote proxy connection timed out');
+    }
+    if (error instanceof Error && error.message === 'Request timeout') {
       throw new Error('Remote proxy connection timed out');
     }
     throw error;

@@ -80,7 +80,7 @@ const schema = z.object({
   opusModel: z.string().optional(),
   sonnetModel: z.string().optional(),
   haikuModel: z.string().optional(),
-  target: z.enum(['claude', 'droid']),
+  target: z.enum(['claude', 'droid', 'codex']),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -521,6 +521,7 @@ export function ProfileCreateDialog({
                     <SelectContent>
                       <SelectItem value="claude">Claude Code (default)</SelectItem>
                       <SelectItem value="droid">Factory Droid</SelectItem>
+                      <SelectItem value="codex">Codex CLI</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
@@ -528,6 +529,11 @@ export function ProfileCreateDialog({
                       <>
                         {t('profileEditor.targetHintPreferredAlias')}{' '}
                         <code className="bg-muted px-1 rounded text-[10px]">ccs-droid</code>.
+                      </>
+                    ) : targetValue === 'codex' ? (
+                      <>
+                        {t('profileEditor.targetHintPreferredAlias')}{' '}
+                        <code className="bg-muted px-1 rounded text-[10px]">ccsx</code>.
                       </>
                     ) : (
                       <>
@@ -540,6 +546,12 @@ export function ProfileCreateDialog({
                         {' '}
                         {t('profileEditor.targetHintLegacyAlias')}{' '}
                         <code className="bg-muted px-1 rounded text-[10px]">ccsd</code>.
+                      </>
+                    ) : targetValue === 'codex' ? (
+                      <>
+                        {' '}
+                        {t('profileEditor.targetHintLegacyAlias')}{' '}
+                        <code className="bg-muted px-1 rounded text-[10px]">ccs-codex</code>.
                       </>
                     ) : null}{' '}
                     {t('profileEditor.targetHintOverride')}{' '}

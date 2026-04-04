@@ -4,7 +4,7 @@
  * Unit tests for ccs config image-analysis subcommand.
  */
 
-import { describe, it, expect, beforeEach, afterEach, spyOn, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -33,6 +33,13 @@ function createConfigYaml(content: string): void {
   fs.writeFileSync(path.join(testDir, 'config.yaml'), content, 'utf8');
 }
 
+async function loadHandleConfigImageAnalysisCommand() {
+  const mod = await import(
+    `../../../src/commands/config-image-analysis-command?test=${Date.now()}-${Math.random()}`
+  );
+  return mod.handleConfigImageAnalysisCommand;
+}
+
 describe('config image-analysis command', () => {
   describe('config file parsing', () => {
     it('should parse enabled status from config.yaml', () => {
@@ -42,13 +49,13 @@ image_analysis:
   enabled: true
   timeout: 60
   provider_models:
-    agy: gemini-2.5-flash
+    agy: gemini-3-1-flash-preview
 `);
 
       const content = fs.readFileSync(path.join(testDir, 'config.yaml'), 'utf8');
       expect(content).toContain('enabled: true');
       expect(content).toContain('timeout: 60');
-      expect(content).toContain('agy: gemini-2.5-flash');
+      expect(content).toContain('agy: gemini-3-1-flash-preview');
     });
 
     it('should parse disabled status from config.yaml', () => {
@@ -72,14 +79,14 @@ image_analysis:
   enabled: true
   timeout: 60
   provider_models:
-    agy: gemini-2.5-flash
+    agy: gemini-3-1-flash-preview
     gemini: gemini-2.5-pro
     codex: gpt-5.1-codex-mini
     kiro: kiro-claude-haiku-4-5
 `);
 
       const content = fs.readFileSync(path.join(testDir, 'config.yaml'), 'utf8');
-      expect(content).toContain('agy: gemini-2.5-flash');
+      expect(content).toContain('agy: gemini-3-1-flash-preview');
       expect(content).toContain('gemini: gemini-2.5-pro');
       expect(content).toContain('codex: gpt-5.1-codex-mini');
       expect(content).toContain('kiro: kiro-claude-haiku-4-5');
@@ -152,6 +159,56 @@ image_analysis:
         expect(validProviders.includes(provider)).toBe(false);
       }
     });
+
+    it('rejects invalid fallback backends that are not configured', async () => {
+      const handleConfigImageAnalysisCommand = await loadHandleConfigImageAnalysisCommand();
+      const originalProcessExit = process.exit;
+
+      process.exit = ((code?: number) => {
+        throw new Error(`process.exit(${code ?? 0})`);
+      }) as typeof process.exit;
+
+      try {
+        await expect(
+          handleConfigImageAnalysisCommand(['--set-fallback', 'unknown-provider'])
+        ).rejects.toThrow('process.exit(1)');
+      } finally {
+        process.exit = originalProcessExit;
+      }
+
+      const configPath = path.join(testDir, 'config.yaml');
+      if (fs.existsSync(configPath)) {
+        const content = fs.readFileSync(configPath, 'utf8');
+        expect(content).not.toContain('fallback_backend: unknown-provider');
+      } else {
+        expect(fs.existsSync(configPath)).toBe(false);
+      }
+    });
+
+    it('rejects invalid profile backend mappings that are not configured', async () => {
+      const handleConfigImageAnalysisCommand = await loadHandleConfigImageAnalysisCommand();
+      const originalProcessExit = process.exit;
+
+      process.exit = ((code?: number) => {
+        throw new Error(`process.exit(${code ?? 0})`);
+      }) as typeof process.exit;
+
+      try {
+        await expect(
+          handleConfigImageAnalysisCommand(['--set-profile-backend', 'orq', 'unknown-provider'])
+        ).rejects.toThrow('process.exit(1)');
+      } finally {
+        process.exit = originalProcessExit;
+      }
+
+      const configPath = path.join(testDir, 'config.yaml');
+      if (fs.existsSync(configPath)) {
+        const content = fs.readFileSync(configPath, 'utf8');
+        expect(content).not.toContain('unknown-provider');
+      } else {
+        expect(fs.existsSync(configPath)).toBe(false);
+      }
+    });
   });
 
   describe('default configuration', () => {
@@ -161,8 +218,8 @@ image_analysis:
         enabled: true,
         timeout: 60,
         provider_models: {
-          agy: 'gemini-2.5-flash',
-          gemini: 'gemini-2.5-flash',
+          agy: 'gemini-3-1-flash-preview',
+          gemini: 'gemini-3-flash-preview',
           codex: 'gpt-5.1-codex-mini',
           kiro: 'kiro-claude-haiku-4-5',
           ghcp: 'claude-haiku-4.5',
@@ -187,7 +244,7 @@ image_analysis:
   enabled: true
   timeout: 60
   provider_models:
-    agy: gemini-2.5-flash
+    agy: gemini-3-1-flash-preview
 `);
 
       const content = fs.readFileSync(path.join(testDir, 'config.yaml'), 'utf8');
