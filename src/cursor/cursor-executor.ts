@@ -627,10 +627,10 @@ export class CursorExecutor {
 
       if (offset + 5 + length > buffer.length) break;
 
-      let payload = buffer.slice(offset + 5, offset + 5 + length);
+      const rawPayload = buffer.subarray(offset + 5, offset + 5 + length);
       offset += 5 + length;
 
-      payload = decompressPayload(payload, flags);
+      const payload = decompressPayload(rawPayload, flags);
 
       // Check for JSON error format
       try {

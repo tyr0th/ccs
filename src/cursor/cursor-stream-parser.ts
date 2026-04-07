@@ -77,10 +77,10 @@ export class StreamingFrameParser {
       if (this.buffer.length < frameSize) break;
 
       const flags = this.buffer[0];
-      let payload = this.buffer.slice(5, frameSize);
-      this.buffer = this.buffer.slice(frameSize);
+      const rawPayload = this.buffer.subarray(5, frameSize);
+      this.buffer = this.buffer.subarray(frameSize);
 
-      payload = decompressPayload(payload, flags);
+      const payload = decompressPayload(rawPayload, flags);
 
       // Check for JSON error
       try {
